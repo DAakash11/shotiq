@@ -1,0 +1,62 @@
+.scroll {
+  /* Two jobs: horizontal scrolling on narrow screens so the page body
+     never scrolls sideways, and a height cap so the sticky header below
+     has something to stick to. */
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.caption {
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-muted);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-3) var(--space-4);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--color-bg);
+}
+
+.right {
+  text-align: right;
+  /* Tabular figures give every digit the same width, so numbers line up
+     into columns instead of jittering. Standard for data tables. */
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  padding: var(--space-6);
+  color: var(--color-text-muted);
+  text-align: center;
+}

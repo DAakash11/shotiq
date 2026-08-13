@@ -4,6 +4,10 @@ An interactive dashboard for exploring NBA shot data — shot distance, angle, d
 
 Currently analysing **Nikola Jokić, 2021-22 regular season** (1,311 field-goal attempts).
 
+## Features
+
+- **Shot table** — every field-goal attempt with date, opponent, quarter, game clock, action type, court zone, distance, release angle and result. Built on a reusable, data-agnostic `DataTable` component driven by a column configuration.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -60,3 +64,7 @@ Shot data comes from `stats.nba.com` via the [`nba_api`](https://github.com/swar
 Responses are cached to `server/cache/` on first fetch. A completed season is immutable, so the cache is served indefinitely — add `?refresh=true` to force a refetch. The cache is committed to the repository deliberately: `stats.nba.com` is undocumented, rate-limits aggressively, and blocks many datacenter IP ranges, so the cache doubles as a fallback that keeps the dashboard working when the upstream is unavailable.
 
 To analyse a different player or season, set the `SHOTIQ_PLAYER_ID`, `SHOTIQ_TEAM_ID` and `SHOTIQ_SEASON` environment variables — see `server/config.py`.
+
+## Acknowledgements
+
+Built as a pair-programming exercise with Claude (Anthropic). The reasoning behind each architectural decision is recorded in the commit history.

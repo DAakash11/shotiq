@@ -41,3 +41,24 @@
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
+
+.tableSection {
+  margin-top: var(--space-6);
+}
+
+.tableMeta {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Made/missed is carried by the word itself, not by colour alone, so the
+   table stays readable for colour-blind users and in greyscale print. */
+.made {
+  font-weight: 600;
+  color: #067647;
+}
+
+.missed {
+  color: var(--color-text-muted);
+}
