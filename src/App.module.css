@@ -24,7 +24,20 @@
   color: var(--color-text-muted);
 }
 
-.placeholder {
+.summary {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.summaryHeading {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.source {
+  margin-top: var(--space-3);
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }

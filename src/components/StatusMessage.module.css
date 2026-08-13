@@ -1,0 +1,25 @@
+.message {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.info {
+  border-left: 3px solid var(--color-accent);
+}
+
+.error {
+  border-left: 3px solid #b42318;
+  background: #fef3f2;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.detail {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}

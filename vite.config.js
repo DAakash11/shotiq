@@ -12,7 +12,11 @@ export default defineConfig({
     // production behind nginx at step 7. No environment-specific URLs.
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // 127.0.0.1, not localhost. Node resolves 'localhost' to the IPv6
+        // address ::1, while uvicorn binds IPv4 by default -- so the proxy
+        // would fail with ECONNREFUSED ::1:8000. Naming the IPv4 address
+        // explicitly removes the ambiguity.
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
     },

@@ -35,6 +35,18 @@ npm run dev
 
 Vite prints a local URL (http://localhost:5173 by default) and proxies `/api` through to the Python service.
 
+## Project structure
+
+```
+src/
+  components/   presentational React components
+  hooks/        reusable stateful logic (useFetchData)
+  services/     the only place that calls fetch
+server/         FastAPI service + cached NBA data
+```
+
+Components never call `fetch` directly. They call a service function, or a hook that wraps one, so request handling stays in one place and components can be tested without a network.
+
 ## Data
 
 Shot data comes from `stats.nba.com` via the [`nba_api`](https://github.com/swar/nba_api) package.
