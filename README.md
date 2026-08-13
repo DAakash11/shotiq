@@ -41,6 +41,27 @@ npm run dev
 
 Vite prints a local URL (http://localhost:5173 by default) and proxies `/api` through to the Python service.
 
+## Tests
+
+```
+npm test
+```
+
+```
+cd server
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.venv\Scripts\python.exe -m pytest
+```
+
+| Suite | Covers |
+| --- | --- |
+| `src/utils/sorting.test.js` | The sort comparator — missing values last in *both* directions, the input array never mutated, natural ordering so `Q2` precedes `Q10`. |
+| `src/services/nbaApi.test.js` | Query-string construction and the `response.ok` check, since `fetch` resolves rather than rejects on 4xx and 5xx. |
+| `server/tests/test_nba_source.py` | Season parsing and validation, shot-angle derivation, team-abbreviation lookup, player-search ranking. |
+| `server/tests/test_api.py` | Real HTTP requests through FastAPI's `TestClient`. |
+
+The API tests run **entirely offline**: the default subject's responses are committed to `server/cache/`, so the data endpoints resolve from disk and the results are deterministic. One test asserts `meta.source == "cache"` specifically so the suite fails if it ever starts silently reaching out to `stats.nba.com`.
+
 ## Project structure
 
 ```

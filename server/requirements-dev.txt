@@ -1,0 +1,8 @@
+# Test-only dependencies. Kept separate from requirements.txt so the
+# production Docker image at step 7 does not ship a test runner.
+-r requirements.txt
+
+pytest==9.1.1
+# Starlette's TestClient (which FastAPI's TestClient wraps) now expects
+# httpx2; the original httpx still works but warns on every run.
+httpx2==2.10.0
