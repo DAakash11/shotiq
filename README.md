@@ -7,6 +7,7 @@ Currently analysing **Nikola Jokić, 2021-22 regular season** (1,311 field-goal 
 ## Features
 
 - **Shot table** — every field-goal attempt with date, opponent, quarter, game clock, action type, court zone, distance, release angle and result. Built on a reusable, data-agnostic `DataTable` component driven by a column configuration.
+- **Search and sort** — case-insensitive search across date, opponent, action and zone. Click any column header to cycle ascending → descending → back to game order. Missing values always sort last, in either direction.
 
 ## Requirements
 
