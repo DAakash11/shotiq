@@ -17,6 +17,14 @@ dist-ssr
 __pycache__/
 *.pyc
 
+# Cached NBA responses are keyed by player and season, so browsing the app
+# accumulates them locally. Only the default subject is committed, since it
+# is the offline fallback that keeps the dashboard working when
+# stats.nba.com is unreachable.
+server/cache/*
+!server/cache/shots-1628983-2025-26.json
+!server/cache/splits-1628983-2025-26.json
+
 # Environment — never commit real keys
 .env
 .env.*

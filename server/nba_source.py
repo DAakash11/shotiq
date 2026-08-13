@@ -1,30 +1,59 @@
 """Talks to stats.nba.com and hands the frontend clean, predictable JSON.
 
-This is the only module that knows stats.nba.com exists. It does three jobs:
+This is the only module that knows stats.nba.com exists. It does four jobs:
 
-1. Calls the two nba_api endpoints we need.
+1. Calls the two nba_api endpoints we need, for any player and season.
 2. Normalises their SHOUTING_SNAKE_CASE columns into camelCase records,
    dropping fields the UI has no use for and deriving shot angle.
-3. Caches every successful response to disk, and falls back to that cache
-   when the upstream is unavailable.
+3. Caches every successful response to disk, keyed by player and season,
+   and falls back to that cache when the upstream is unavailable.
+4. Searches the offline player list that ships with nba_api.
 
-Why cache so aggressively: stats.nba.com is undocumented, rate-limits hard,
-and blocks datacenter IP ranges. It is also *immutable* for a completed
-season -- Jokic's 2021-22 shots will never change -- so there is no
-correctness cost to caching a past season forever.
+Why cache so aggressively: stats.nba.com is undocumented, rate-limits
+hard, and blocks datacenter IP ranges. Completed seasons are also
+immutable -- a 2021-22 shot chart will never change -- so there is no
+correctness cost to caching a past season indefinitely.
 """
 
 import json
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 from nba_api.stats.endpoints import playerdashptshots, shotchartdetail
-from nba_api.stats.static import teams
+from nba_api.stats.static import players, teams
 
 import config
 
 CACHE_DIR = Path(__file__).parent / "cache"
+
+SEASON_PATTERN = re.compile(r"^(\d{4})-(\d{2})$")
+
+# team_id=0 means "this player, whichever team he was on". Pinning a real
+# team id would silently drop half the shots of anyone traded mid-season.
+ANY_TEAM = 0
+
+
+# --- validation ---------------------------------------------------------
+
+
+def parse_season(season):
+    """Validate a '2025-26' style season and return its start year."""
+    match = SEASON_PATTERN.match(season or "")
+    if not match:
+        raise ValueError(f"Season must look like '2025-26', got {season!r}")
+
+    start_year = int(match.group(1))
+    if start_year < config.FIRST_SHOT_CHART_YEAR:
+        raise ValueError(
+            f"Shot coordinates only exist from "
+            f"{config.season_label(config.FIRST_SHOT_CHART_YEAR)} onwards"
+        )
+    if start_year > config.latest_season_start_year():
+        raise ValueError(f"Season {season} has not started yet")
+
+    return start_year
 
 
 # --- helpers ------------------------------------------------------------
@@ -46,9 +75,24 @@ def _find_result_set(payload, name):
     )
 
 
+def _player_name(player_id):
+    player = players.find_player_by_id(player_id)
+    return player["full_name"] if player else None
+
+
+_TEAM_ABBREVIATIONS = {}
+
+
 def _team_abbreviation(team_id):
-    team = teams.find_team_name_by_id(team_id)
-    return team["abbreviation"] if team else None
+    """'OKC' for team id 1610612760. Looked up once, then memoised.
+
+    Deriving this from TEAM_NAME by string matching does not work -- 'OKC'
+    is not a substring of 'Oklahoma City Thunder'.
+    """
+    if team_id not in _TEAM_ABBREVIATIONS:
+        team = teams.find_team_name_by_id(team_id)
+        _TEAM_ABBREVIATIONS[team_id] = team["abbreviation"] if team else None
+    return _TEAM_ABBREVIATIONS[team_id]
 
 
 def _shot_angle_degrees(loc_x, loc_y, distance_ft):
@@ -71,11 +115,13 @@ def _iso_date(raw):
     return f"{raw[0:4]}-{raw[4:6]}-{raw[6:8]}"
 
 
-def _meta(source, extra=None):
+def _meta(player_id, season, source, extra=None):
     meta = {
-        "playerId": config.PLAYER_ID,
-        "season": config.SEASON,
+        "playerId": player_id,
+        "player": _player_name(player_id),
+        "season": season,
         "seasonType": config.SEASON_TYPE,
+        "hasTracking": parse_season(season) >= config.FIRST_TRACKING_YEAR,
         "source": source,
         "fetchedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
@@ -87,12 +133,12 @@ def _meta(source, extra=None):
 # --- cache --------------------------------------------------------------
 
 
-def _cache_path(name):
-    return CACHE_DIR / f"{name}.json"
+def _cache_path(kind, player_id, season):
+    return CACHE_DIR / f"{kind}-{player_id}-{season}.json"
 
 
-def _read_cache(name):
-    path = _cache_path(name)
+def _read_cache(kind, player_id, season):
+    path = _cache_path(kind, player_id, season)
     if not path.exists():
         return None
     try:
@@ -101,33 +147,67 @@ def _read_cache(name):
         return None
 
 
-def _write_cache(name, payload):
+def _write_cache(kind, player_id, season, payload):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    _cache_path(name).write_text(
+    _cache_path(kind, player_id, season).write_text(
         json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
     )
+
+
+# --- player search ------------------------------------------------------
+
+
+def search_players(query, limit=15):
+    """Search the offline player list bundled with nba_api. No network."""
+    matches = players.find_players_by_full_name(query)
+
+    # Active players first, then alphabetically -- someone typing "curry"
+    # almost certainly means Stephen, not Dell.
+    matches.sort(key=lambda player: (not player["is_active"], player["full_name"]))
+
+    return [
+        {
+            "id": player["id"],
+            "name": player["full_name"],
+            "isActive": player["is_active"],
+        }
+        for player in matches[:limit]
+    ]
+
+
+def list_seasons():
+    """Every season with shot-chart data, newest first."""
+    latest = config.latest_season_start_year()
+    return [
+        {
+            "value": config.season_label(year),
+            "hasTracking": year >= config.FIRST_TRACKING_YEAR,
+        }
+        for year in range(latest, config.FIRST_SHOT_CHART_YEAR - 1, -1)
+    ]
 
 
 # --- shot-level data ----------------------------------------------------
 
 
-def _fetch_shots():
+def _fetch_shots(player_id, season):
     response = shotchartdetail.ShotChartDetail(
-        team_id=config.TEAM_ID,
-        player_id=config.PLAYER_ID,
-        season_nullable=config.SEASON,
+        team_id=ANY_TEAM,
+        player_id=player_id,
+        season_nullable=season,
         season_type_all_star=config.SEASON_TYPE,
         context_measure_simple="FGA",
         timeout=config.NBA_TIMEOUT_SECONDS,
     ).get_dict()
 
-    own_abbr = _team_abbreviation(config.TEAM_ID)
     raw_shots = _rows_as_dicts(_find_result_set(response, "Shot_Chart_Detail"))
 
     shots = []
     for row in raw_shots:
         home, visitor = row.get("HTM"), row.get("VTM")
-        is_home = home == own_abbr
+        # We no longer pin a team id, so read the player's team from the row
+        # itself. That keeps home/away correct for a player traded mid-season.
+        is_home = home == _team_abbreviation(row.get("TEAM_ID"))
         distance = row.get("SHOT_DISTANCE")
         minutes = row.get("MINUTES_REMAINING") or 0
         seconds = row.get("SECONDS_REMAINING") or 0
@@ -172,15 +252,14 @@ def _fetch_shots():
     ]
 
     made = sum(1 for shot in shots if shot["made"])
-    player_name = raw_shots[0]["PLAYER_NAME"] if raw_shots else None
-    team_name = raw_shots[0]["TEAM_NAME"] if raw_shots else None
 
     return {
         "meta": _meta(
+            player_id,
+            season,
             "live",
             {
-                "player": player_name,
-                "team": team_name,
+                "team": raw_shots[0]["TEAM_NAME"] if raw_shots else None,
                 "attempts": len(shots),
                 "made": made,
                 "fgPct": round(made / len(shots), 3) if shots else None,
@@ -226,17 +305,19 @@ def _normalise_split_row(row, label_column):
     }
 
 
-def _fetch_splits():
+def _fetch_splits(player_id, season):
     response = playerdashptshots.PlayerDashPtShots(
-        player_id=config.PLAYER_ID,
-        team_id=config.TEAM_ID,
-        season=config.SEASON,
+        player_id=player_id,
+        team_id=ANY_TEAM,
+        season=season,
         season_type_all_star=config.SEASON_TYPE,
         timeout=config.NBA_TIMEOUT_SECONDS,
     ).get_dict()
 
     overall_rows = _rows_as_dicts(_find_result_set(response, "Overall"))
-    overall = _normalise_split_row(overall_rows[0], "SHOT_TYPE") if overall_rows else None
+    overall = (
+        _normalise_split_row(overall_rows[0], "SHOT_TYPE") if overall_rows else None
+    )
 
     splits = {}
     for key, (result_set_name, label_column) in SPLIT_SETS.items():
@@ -247,10 +328,13 @@ def _fetch_splits():
         normalised.sort(key=lambda item: item["sortOrder"] or 0)
         splits[key] = normalised
 
-    player_name = overall_rows[0]["PLAYER_NAME_LAST_FIRST"] if overall_rows else None
-
     return {
-        "meta": _meta("live", {"player": player_name, "games": overall["games"] if overall else None}),
+        "meta": _meta(
+            player_id,
+            season,
+            "live",
+            {"games": overall["games"] if overall else None},
+        ),
         "overall": overall,
         "splits": splits,
     }
@@ -259,31 +343,45 @@ def _fetch_splits():
 # --- public API ---------------------------------------------------------
 
 
-def _load(name, fetcher, refresh=False):
+def _load(kind, fetcher, player_id, season, refresh=False):
     """Serve from cache unless asked to refresh; fall back to cache on failure."""
+    parse_season(season)
+
     if not refresh:
-        cached = _read_cache(name)
+        cached = _read_cache(kind, player_id, season)
         if cached is not None:
             cached["meta"]["source"] = "cache"
             return cached
 
     try:
-        payload = fetcher()
+        payload = fetcher(player_id, season)
     except Exception as exc:
-        cached = _read_cache(name)
+        cached = _read_cache(kind, player_id, season)
         if cached is not None:
             cached["meta"]["source"] = "cache"
             cached["meta"]["warning"] = f"Live fetch failed, served cache: {exc}"
             return cached
         raise
 
-    _write_cache(name, payload)
+    _write_cache(kind, player_id, season, payload)
     return payload
 
 
-def load_shots(refresh=False):
-    return _load("shots", _fetch_shots, refresh)
+def load_shots(player_id=None, season=None, refresh=False):
+    return _load(
+        "shots",
+        _fetch_shots,
+        player_id or config.DEFAULT_PLAYER_ID,
+        season or config.DEFAULT_SEASON,
+        refresh,
+    )
 
 
-def load_splits(refresh=False):
-    return _load("splits", _fetch_splits, refresh)
+def load_splits(player_id=None, season=None, refresh=False):
+    return _load(
+        "splits",
+        _fetch_splits,
+        player_id or config.DEFAULT_PLAYER_ID,
+        season or config.DEFAULT_SEASON,
+        refresh,
+    )

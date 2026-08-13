@@ -24,6 +24,14 @@
   color: var(--color-text-muted);
 }
 
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-start;
+  margin-bottom: var(--space-6);
+}
+
 .summary {
   padding: var(--space-5);
   border: 1px solid var(--color-border);

@@ -2,10 +2,11 @@
 
 An interactive dashboard for exploring NBA shot data — shot distance, angle, defender pressure and shot-clock context.
 
-Currently analysing **Nikola Jokić, 2021-22 regular season** (1,311 field-goal attempts).
+Opens on **Shai Gilgeous-Alexander, 2025-26** — the reigning MVP — and any player from 1996-97 onwards can be loaded from the UI.
 
 ## Features
 
+- **Player and season selection** — search any player in NBA history by name and pick any season back to 1996-97, when shot coordinates were first recorded league-wide. Seasons before 2013-14 predate player tracking, which the season picker labels rather than failing on.
 - **Shot table** — every field-goal attempt with date, opponent, quarter, game clock, action type, court zone, distance, release angle and result. Built on a reusable, data-agnostic `DataTable` component driven by a column configuration.
 - **Search and sort** — case-insensitive search across date, opponent, action and zone. Click any column header to cycle ascending → descending → back to game order. Missing values always sort last, in either direction.
 
@@ -58,13 +59,19 @@ Shot data comes from `stats.nba.com` via the [`nba_api`](https://github.com/swar
 
 | Endpoint | Contents |
 | --- | --- |
-| `GET /api/shots` | One record per field-goal attempt — distance, angle, court coordinates, period and clock, zone, make/miss. Also returns league-average FG% by zone as a comparison baseline. |
-| `GET /api/splits` | Tracking splits — defender distance, shot clock, dribbles, touch time and shot category, each with FG% and eFG%. |
+| `GET /api/shots?playerId=&season=` | One record per field-goal attempt — distance, angle, court coordinates, period and clock, zone, make/miss. Also returns league-average FG% by zone as a comparison baseline. |
+| `GET /api/splits?playerId=&season=` | Tracking splits — defender distance, shot clock, dribbles, touch time and shot category, each with FG% and eFG%. Empty for seasons before 2013-14. |
+| `GET /api/players?q=` | Player name search. Backed by the offline list bundled with `nba_api`, so it never touches the network. |
+| `GET /api/seasons` | Selectable seasons, newest first, each flagged for whether player-tracking data exists. |
 | `GET /api/health` | Liveness check. Does not call the NBA API. |
 
-Responses are cached to `server/cache/` on first fetch. A completed season is immutable, so the cache is served indefinitely — add `?refresh=true` to force a refetch. The cache is committed to the repository deliberately: `stats.nba.com` is undocumented, rate-limits aggressively, and blocks many datacenter IP ranges, so the cache doubles as a fallback that keeps the dashboard working when the upstream is unavailable.
+Both data endpoints fall back to the configured default when `playerId` or `season` is omitted, so the client never has to hard-code who the featured player is.
 
-To analyse a different player or season, set the `SHOTIQ_PLAYER_ID`, `SHOTIQ_TEAM_ID` and `SHOTIQ_SEASON` environment variables — see `server/config.py`.
+Queries use `team_id=0`, meaning "this player on whichever team" — pinning a team id would silently drop half the shots of anyone traded mid-season.
+
+Responses are cached to `server/cache/`, keyed by player and season. A completed season is immutable, so the cache is served indefinitely — add `?refresh=true` to force a refetch. Only the default subject's cache is committed to the repository: `stats.nba.com` is undocumented, rate-limits aggressively, and blocks many datacenter IP ranges, so that one file doubles as a fallback keeping the dashboard working when the upstream is unavailable. Other players are fetched live on demand and cached locally.
+
+To change which player and season the app opens on, set the `SHOTIQ_PLAYER_ID` and `SHOTIQ_SEASON` environment variables — see `server/config.py`.
 
 ## Acknowledgements
 

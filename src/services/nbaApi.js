@@ -29,14 +29,32 @@ async function getJson(path, signal) {
   return response.json()
 }
 
-// These are declared at module scope, which gives each one a stable
-// identity for the lifetime of the app. That matters -- see the dependency
-// array note in hooks/useFetchData.js.
-
-export function fetchShots(signal) {
-  return getJson('/api/shots', signal)
+// Omitting playerId/season lets the API apply its own defaults, so the
+// first load does not need the client to know who the featured player is.
+function subjectQuery({ playerId, season } = {}) {
+  const params = new URLSearchParams()
+  if (playerId != null) params.set('playerId', String(playerId))
+  if (season) params.set('season', season)
+  const query = params.toString()
+  return query ? `?${query}` : ''
 }
 
-export function fetchSplits(signal) {
-  return getJson('/api/splits', signal)
+export function fetchShots(subject, signal) {
+  return getJson(`/api/shots${subjectQuery(subject)}`, signal)
+}
+
+export function fetchSplits(subject, signal) {
+  return getJson(`/api/splits${subjectQuery(subject)}`, signal)
+}
+
+// Declared at module scope, so these two have a stable identity and can be
+// handed straight to useFetchData. Anything that varies per render (the
+// subject-dependent fetchers above) must be wrapped in useCallback instead.
+
+export function fetchSeasons(signal) {
+  return getJson('/api/seasons', signal)
+}
+
+export function searchPlayers(query, signal) {
+  return getJson(`/api/players?q=${encodeURIComponent(query)}`, signal)
 }
