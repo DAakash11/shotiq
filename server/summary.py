@@ -46,7 +46,32 @@ SUMMARY_FIELDS = ("headline", "strengths", "watch", "context")
 
 
 class SummaryUnavailable(Exception):
-    """No summary can be produced, and the caller should say so plainly."""
+    """No summary can be produced, and the caller should say so plainly.
+
+    Raised directly when the model itself misbehaved -- empty response,
+    prose instead of JSON, a missing field.
+    """
+
+
+class NothingToSummarise(SummaryUnavailable):
+    """The data cannot support a summary, whatever the model does.
+
+    A season with no recorded attempts. Nothing is wrong with the request
+    or the service; there is simply nothing to say.
+    """
+
+
+class GenerationDisabled(SummaryUnavailable):
+    """Generation is switched off or unconfigured, and nothing is cached.
+
+    Deliberately not the same case as the two above: the request was fine
+    and the data is fine, but this deployment is not permitted to spend
+    quota. That distinction is what lets the route answer 503 here and
+    422 for a genuinely empty season.
+
+    These are named for what happened, not for a status code. summary.py
+    does not know HTTP exists -- main.py maps them.
+    """
 
 
 SYSTEM_INSTRUCTION = """\
@@ -188,7 +213,7 @@ def _build_client():
     on a machine that has never configured a key."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise SummaryUnavailable(
+        raise GenerationDisabled(
             "GEMINI_API_KEY is not set. Copy .env.example to .env and add a "
             "key from https://aistudio.google.com/apikey"
         )
@@ -228,7 +253,7 @@ def generate(digest, client=None):
     needing a key.
     """
     if not analytics.has_enough_data(digest):
-        raise SummaryUnavailable(
+        raise NothingToSummarise(
             f"{digest.get('player') or 'This player'} has no recorded "
             f"attempts in {digest.get('season')}, so there is nothing to "
             f"summarise."
@@ -279,7 +304,7 @@ def load_summary(player_id, season, digest, refresh=False, client=None):
             return cached
 
     if not config.SUMMARY_LIVE:
-        raise SummaryUnavailable(
+        raise GenerationDisabled(
             "Live generation is disabled (SHOTIQ_SUMMARY_LIVE is not 'true'), "
             "and no summary is cached for this player and season."
         )
