@@ -24,6 +24,10 @@ __pycache__/
 server/cache/*
 !server/cache/shots-1628983-2025-26.json
 !server/cache/splits-1628983-2025-26.json
+# The generated summary ships too, so the AI panel works for anyone who
+# clones this without an API key -- and so a hosted demo can serve it with
+# SHOTIQ_SUMMARY_LIVE left off.
+!server/cache/summary-1628983-2025-26.json
 
 # Environment — never commit real keys
 .env

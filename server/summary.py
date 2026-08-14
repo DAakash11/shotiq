@@ -263,16 +263,33 @@ def generate(digest, client=None):
 
     client = client or _build_client()
 
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=build_prompt(digest),
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",
-            response_schema=RESPONSE_SCHEMA,
-            temperature=TEMPERATURE,
-        ),
-    )
+    try:
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=build_prompt(digest),
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                response_mime_type="application/json",
+                response_schema=RESPONSE_SCHEMA,
+                temperature=TEMPERATURE,
+            ),
+        )
+    except SummaryUnavailable:
+        raise
+    except Exception as exc:
+        # Anything the vendor SDK raises -- the model overloaded, a quota
+        # exhausted, the network gone, a stale model id -- becomes our own
+        # error type here.
+        #
+        # Found by the first real call, which hit "503 UNAVAILABLE: this
+        # model is currently experiencing high demand". Without this the
+        # SDK's exception sails past every handler in the route and the
+        # client gets an opaque 500, when the honest answer is that the
+        # upstream failed and trying again later may well work.
+        raise SummaryUnavailable(
+            f"The model could not be reached ({type(exc).__name__}: {exc}). "
+            f"This is often temporary."
+        ) from exc
 
     summary = _parse(response.text)
     summary["meta"] = {

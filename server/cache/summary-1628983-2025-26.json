@@ -1,0 +1,18 @@
+{
+ "headline": "High-volume pull-up scoring anchored by exceptional efficiency across the paint and mid-range.",
+ "strengths": [
+  "From 8-16 feet, he converted 57.3% of his 412 attempts, finishing 12.7 percentage points above the league average on that range.",
+  "He made 65.6% of his 477 shots from less than 8 feet, which was 5.3 percentage points above the league average.",
+  "On long two-point attempts between 16 and 24 feet, he shot 50.0% on 134 attempts, beating the league average by 9.9 percentage points."
+ ],
+ "watch": [
+  "When forced to shoot very late in the shot clock with 4-0 seconds remaining, his efficiency dropped to 38.0% on 79 attempts."
+ ],
+ "context": "His shot diet relied heavily on self-creation, with pull-ups representing 57.2% of his total attempts across 756 shots. Most of his looks were contested, as tight and open coverage between 2 and 6 feet accounted for 82.1% of his attempts. Over 70% of his attempts came early to average in the shot clock, comprising 29.5% between 18-15 seconds and 44.5% between 15-7 seconds.",
+ "meta": {
+  "model": "gemini-3.7-flash",
+  "generatedAt": "2026-08-14T14:07:54+00:00",
+  "digest": "ef39cd61bc11",
+  "source": "live"
+ }
+}

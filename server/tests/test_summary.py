@@ -185,6 +185,30 @@ class TestGenerate:
         with pytest.raises(summary.SummaryUnavailable, match="nothing to summarise"):
             summary.generate(empty, client=StubClient())
 
+    def test_turns_a_vendor_failure_into_our_own_error(self, digest):
+        # Regression test. The first live call returned Gemini's
+        # "503 UNAVAILABLE: high demand", and the SDK exception sailed past
+        # every handler in the route, so the client saw an opaque 500
+        # instead of the 502 the design called for. Every error path had
+        # been tested except the one raised by someone else's code.
+        class ExplodingClient:
+            def __init__(self):
+                self.models = self
+
+            def generate_content(self, **kwargs):
+                raise RuntimeError("503 UNAVAILABLE. high demand")
+
+        with pytest.raises(summary.SummaryUnavailable, match="could not be reached"):
+            summary.generate(digest, client=ExplodingClient())
+
+    def test_does_not_swallow_our_own_errors_as_vendor_errors(self, digest):
+        # The broad except must not relabel a NothingToSummarise raised
+        # deeper down as an unreachable model.
+        empty = analytics.build_digest(None, None)
+
+        with pytest.raises(summary.NothingToSummarise):
+            summary.generate(empty, client=StubClient())
+
     def test_records_which_digest_it_described(self, digest):
         result = summary.generate(digest, client=StubClient())
 
