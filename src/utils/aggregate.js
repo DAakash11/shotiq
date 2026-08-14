@@ -75,6 +75,11 @@ export function shootingByDistance(shots, leagueAverages) {
       missed: attempts - made,
       fgPct,
       leagueFgPct,
+      // How many of these SAME attempts a league-average shooter makes.
+      // The chart marks this on the bar, so the gap between the mark and
+      // the colour boundary is the player's edge counted in shots -- a
+      // more concrete quantity than a percentage-point difference.
+      leagueMade: leagueFgPct != null ? leagueFgPct * attempts : null,
       // Percentage points, not a ratio -- '+12.7pt', not '1.28x'.
       diff: fgPct != null && leagueFgPct != null ? fgPct - leagueFgPct : null,
       isLowSample: attempts > 0 && attempts < MIN_ATTEMPTS,

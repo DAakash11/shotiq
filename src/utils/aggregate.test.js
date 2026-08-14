@@ -73,6 +73,20 @@ describe('shootingByDistance', () => {
     expect(diff).toBeCloseTo(0.124, 3)
   })
 
+  it('expresses the league rate as makes on the same volume', () => {
+    // 100 attempts at a league rate of .446 is 44.6 makes, against the
+    // player's 57 -- an edge of roughly 12 shots over the season.
+    const band = bandOf(
+      shootingByDistance(shots('8-16 ft.', 100, 57), [
+        { zoneRange: '8-16 ft.', fgm: 446, fga: 1000 },
+      ]),
+      '8-16 ft',
+    )
+
+    expect(band.leagueMade).toBeCloseTo(44.6, 1)
+    expect(band.made - band.leagueMade).toBeCloseTo(12.4, 1)
+  })
+
   it('leaves an unshot band null rather than zero', () => {
     const band = bandOf(shootingByDistance([], []), '16-24 ft')
 

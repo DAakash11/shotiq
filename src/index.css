@@ -15,6 +15,21 @@
   --color-accent-hover: #c2410c;
   --color-accent-soft: #fff1e9;
 
+  /* Data ink — outcomes, in the table and in the charts alike.
+     Deliberately NOT the accent: orange means "you can click this"
+     everywhere else in the app, so a bar painted with it would read as
+     interactive. Green/grey rather than green/red is also a colour-blind
+     choice — red and green sit at a perceptual distance of about 7 under
+     the common forms of colour blindness, where blue and orange sit at 26.
+     A miss is the normal outcome of most NBA shots, so it recedes rather
+     than being coloured as an error. */
+  --color-made: #067647;
+  --color-missed-fill: #d6d6dc;
+
+  /* Chart chrome — recessive by design, so the data carries the eye */
+  --chart-reference: #16161a;
+  --chart-grid: #eeeef1;
+
   /* Spacing scale — use these instead of arbitrary pixel values */
   --space-1: 0.25rem;
   --space-2: 0.5rem;

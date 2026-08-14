@@ -1,12 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
 
+import ChartCard from './components/ChartCard'
 import DataTable from './components/DataTable'
+import DistanceChart from './components/DistanceChart'
 import PlayerPicker from './components/PlayerPicker'
 import SearchBar from './components/SearchBar'
 import SeasonSelect from './components/SeasonSelect'
+import SplitChart from './components/SplitChart'
 import StatusMessage from './components/StatusMessage'
 import { useFetchData } from './hooks/useFetchData'
-import { fetchSeasons, fetchShots } from './services/nbaApi'
+import { fetchSeasons, fetchShots, fetchSplits } from './services/nbaApi'
+import { shootingByDistance, splitSeries } from './utils/aggregate'
 import { sortRows } from './utils/sorting'
 import styles from './App.module.css'
 
@@ -22,6 +26,7 @@ const ROW_LIMIT = 100
 // useMemo below on every single render.
 const NO_SHOTS = []
 const NO_SEASONS = []
+const NO_LEAGUE_AVERAGES = []
 
 // Which fields the search box looks at. Free-text matching against numeric
 // columns like distance or angle would surprise more than it would help.
@@ -93,8 +98,14 @@ function App() {
   // refetch. Changing the player or season swaps the identity, the effect
   // re-runs, and the previous request is aborted mid-flight.
   const loadShots = useCallback((signal) => fetchShots(subject ?? {}, signal), [subject])
+  const loadSplits = useCallback((signal) => fetchSplits(subject ?? {}, signal), [subject])
 
   const { data, error, isLoading } = useFetchData(loadShots)
+  // The two requests are independent, so they run in parallel rather than
+  // one waiting on the other. Tracking splits are also allowed to fail on
+  // their own: the charts that need them disappear, the rest of the page
+  // carries on.
+  const { data: splitData } = useFetchData(loadSplits)
   // fetchSeasons takes no arguments and lives at module scope, so it needs
   // no useCallback -- the same hook handles both cases.
   const { data: seasonData } = useFetchData(fetchSeasons)
@@ -108,6 +119,28 @@ function App() {
 
   const seasons = seasonData?.seasons ?? NO_SEASONS
   const shots = data?.shots ?? NO_SHOTS
+  const leagueAverages = data?.leagueAverages ?? NO_LEAGUE_AVERAGES
+
+  // Chart data is derived the same way the table's is -- computed during
+  // render, never stored. The aggregation walks every shot, so it is worth
+  // memoising: without this it would re-run on each keystroke in the search
+  // box, which changes nothing the charts display.
+  const distanceBands = useMemo(
+    () => shootingByDistance(shots, leagueAverages),
+    [shots, leagueAverages],
+  )
+  const defenderRows = useMemo(
+    () => splitSeries(splitData?.splits?.defenderDistance),
+    [splitData],
+  )
+  const shotClockRows = useMemo(
+    () => splitSeries(splitData?.splits?.shotClock),
+    [splitData],
+  )
+
+  // The season's own FG%, drawn on the split charts so each bucket reads
+  // against how he shoots overall rather than against nothing.
+  const seasonFgPct = splitData?.overall?.fgPct ?? data?.meta?.fgPct ?? null
 
   // Derived state: computed during render from the data plus the user's
   // input. Storing the filtered rows in their own useState would create a
@@ -219,6 +252,64 @@ function App() {
                 {data.meta.warning && ` · ${data.meta.warning}`}
               </p>
             </section>
+
+            {shots.length > 0 && (
+              <div className={styles.charts}>
+                <ChartCard
+                  title="Shooting by distance"
+                  description="Bar length is attempts, so the chart shows where he shoots as well as how well. The tick marks where the colour boundary would fall if he shot league average on the same attempts."
+                  footnote={
+                    distanceBands.some((band) => band.isLowSample)
+                      ? 'Faded bars have too few attempts to read as a rate.'
+                      : undefined
+                  }
+                >
+                  <DistanceChart
+                    bands={distanceBands}
+                    playerName={data.meta.player}
+                  />
+                </ChartCard>
+
+                {!data.meta.hasTracking ? (
+                  <StatusMessage title="No tracking data for this season">
+                    Defender distance and shot clock come from player tracking,
+                    which the NBA only began recording in 2013-14.
+                  </StatusMessage>
+                ) : (
+                  <div className={styles.chartRow}>
+                    {defenderRows.length > 0 && (
+                      <ChartCard
+                        title="Under pressure"
+                        description="How the closest defender changes his accuracy. A lower percentage when wide open usually means those attempts are threes — check eFG% in the tooltip."
+                      >
+                        <SplitChart
+                          rows={defenderRows}
+                          baseline={seasonFgPct}
+                          axisLabel="closest defender"
+                          bucketLabel="Defender distance"
+                          playerName={data.meta.player}
+                        />
+                      </ChartCard>
+                    )}
+
+                    {shotClockRows.length > 0 && (
+                      <ChartCard
+                        title="Against the clock"
+                        description="Seconds left on the shot clock when the ball goes up. The last bucket is where possessions break down and someone has to force one."
+                      >
+                        <SplitChart
+                          rows={shotClockRows}
+                          baseline={seasonFgPct}
+                          axisLabel="seconds left on the shot clock"
+                          bucketLabel="Shot clock"
+                          playerName={data.meta.player}
+                        />
+                      </ChartCard>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {shots.length > 0 && (
               <section className={styles.tableSection}>

@@ -50,6 +50,21 @@
   color: var(--color-text-muted);
 }
 
+.charts {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+/* auto-fit collapses the two split charts onto one column as soon as they
+   cannot hold 320px each, so the layout adapts without a media query and
+   without a breakpoint to keep in sync with anything else. */
+.chartRow {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
 .tableSection {
   margin-top: var(--space-6);
 }
@@ -64,7 +79,7 @@
    table stays readable for colour-blind users and in greyscale print. */
 .made {
   font-weight: 600;
-  color: #067647;
+  color: var(--color-made);
 }
 
 .missed {

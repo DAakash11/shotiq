@@ -9,6 +9,8 @@ Opens on **Shai Gilgeous-Alexander, 2025-26** — the reigning MVP — and any p
 - **Player and season selection** — search any player in NBA history by name and pick any season back to 1996-97, when shot coordinates were first recorded league-wide. Seasons before 2013-14 predate player tracking, which the season picker labels rather than failing on.
 - **Shot table** — every field-goal attempt with date, opponent, quarter, game clock, action type, court zone, distance, release angle and result. Built on a reusable, data-agnostic `DataTable` component driven by a column configuration.
 - **Search and sort** — case-insensitive search across date, opponent, action and zone. Click any column header to cycle ascending → descending → back to game order. Missing values always sort last, in either direction.
+- **Shooting by distance** — made and missed **attempts** stacked per distance band, so the bar's length carries shot selection while the colour boundary carries accuracy. A tick on each bar marks where that boundary would fall if the player shot league average on the same attempts, making the gap an edge counted in shots rather than in percentage points.
+- **Tracking charts** — field-goal percentage by closest defender and by shot clock, each against the player's own season average. Seasons before 2013-14 predate tracking and say so instead of rendering empty axes.
 
 ## Requirements
 
@@ -56,7 +58,10 @@ cd server
 | Suite | Covers |
 | --- | --- |
 | `src/utils/sorting.test.js` | The sort comparator — missing values last in *both* directions, the input array never mutated, natural ordering so `Q2` precedes `Q10`. |
+| `src/utils/aggregate.test.js` | Chart aggregation — league rates weighted by attempts rather than averaged, rates left `null` at zero attempts, thin samples flagged. |
 | `src/services/nbaApi.test.js` | Query-string construction and the `response.ok` check, since `fetch` resolves rather than rejects on 4xx and 5xx. |
+| `src/components/DistanceChart.test.jsx` | The league-tick arithmetic either side of the colour boundary, plus a guard that Recharts still hands the row to a custom shape. |
+| `src/components/charts.render.test.jsx` | Both charts mounted in a DOM — values printed, ticks drawn, empty seasons rendering nothing. |
 | `server/tests/test_nba_source.py` | Season parsing and validation, shot-angle derivation, team-abbreviation lookup, player-search ranking. |
 | `server/tests/test_api.py` | Real HTTP requests through FastAPI's `TestClient`. |
 
@@ -69,10 +74,15 @@ src/
   components/   presentational React components
   hooks/        reusable stateful logic (useFetchData)
   services/     the only place that calls fetch
+  utils/        pure data logic — sorting, chart aggregation
 server/         FastAPI service + cached NBA data
 ```
 
 Components never call `fetch` directly. They call a service function, or a hook that wraps one, so request handling stays in one place and components can be tested without a network.
+
+The same split applies to data shaping: everything the charts need is computed by pure functions in `utils/`, so the reshaping can be unit-tested without mounting a component and the chart components only ever draw.
+
+One aggregation is worth calling out, because getting it wrong is silent. League field-goal percentage per band is re-derived as `sum(made) / sum(attempts)`, never as the mean of the per-row percentages the API returns. Those rows are split by court area, so a band pairs a 9-attempt backcourt row with a 26,514-attempt one; weighting them equally moves *Above the Break 3* from a true .350 to a reported .429. A test pins the correct figure.
 
 ## Data
 
