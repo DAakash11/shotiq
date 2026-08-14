@@ -1,0 +1,116 @@
+/* The panel sits between the charts and the table, so it borrows the same
+   card shape they use rather than introducing a third container style. */
+.panel {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.header {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.heading {
+  font-size: var(--text-lg);
+}
+
+.subheading {
+  margin-top: var(--space-2);
+  max-width: 46ch;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Orange is reserved for things you can click, which is exactly what this
+   is -- and it is the only interactive element in the panel. */
+.button {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #ffffff;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+/* Never remove the focus ring -- offset it so it clears the button edge
+   instead. A keyboard user has no pointer to tell them where they are. */
+.button:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.idle {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.note {
+  margin-top: var(--space-5);
+}
+
+/* The one sentence the panel exists to deliver, so it gets the size. */
+.headline {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+/* Two columns where there is room, stacked where there is not. auto-fit
+   with minmax means the browser decides the breakpoint from the content
+   rather than from a width I guessed. */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.listHeading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.list {
+  margin-top: var(--space-3);
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.context {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+/* Who wrote this and from what. Quiet, but never absent: a reader should
+   not have to wonder whether a person or a model produced the sentences. */
+.provenance {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}

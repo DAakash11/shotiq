@@ -85,3 +85,9 @@
 .missed {
   color: var(--color-text-muted);
 }
+
+/* The AI panel is a top-level section like .charts and .tableSection, so
+   it takes the same rhythm from here rather than setting its own margin. */
+.summarySection {
+  margin-top: var(--space-6);
+}

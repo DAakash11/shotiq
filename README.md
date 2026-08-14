@@ -83,6 +83,7 @@ cd server
 | `src/services/nbaApi.test.js` | Query-string construction and the `response.ok` check, since `fetch` resolves rather than rejects on 4xx and 5xx. |
 | `src/components/DistanceChart.test.jsx` | The league-tick arithmetic either side of the colour boundary, plus a guard that Recharts still hands the row to a custom shape. |
 | `src/components/charts.render.test.jsx` | Both charts mounted in a DOM — values printed, ticks drawn, empty seasons rendering nothing. |
+| `src/components/AiSummary.test.jsx` | That the panel requests nothing until asked, posts identifiers only, and tells apart a disabled deployment from a real failure. |
 | `server/tests/test_nba_source.py` | Season parsing and validation, shot-angle derivation, team-abbreviation lookup, player-search ranking. |
 | `server/tests/test_analytics.py` | The server-side digest, including the three numbers pinned against the JS twin. |
 | `server/tests/test_summary.py` | Prompt construction, response parsing, the cache gate, and vendor failures becoming our own error type. |

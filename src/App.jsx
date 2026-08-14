@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 
+import AiSummary from './components/AiSummary'
 import ChartCard from './components/ChartCard'
 import DataTable from './components/DataTable'
 import DistanceChart from './components/DistanceChart'
@@ -309,6 +310,22 @@ function App() {
                   </div>
                 )}
               </div>
+            )}
+
+            {shots.length > 0 && (
+              /* The key is doing real work. Changing it unmounts the old
+                 panel and mounts a fresh one, which resets its state for
+                 free -- no effect watching props, and no summary of the
+                 previous player lingering under the new one's name while
+                 a request is in flight. Resetting state by remounting is
+                 usually cleaner than resetting it by hand. */
+              <AiSummary
+                key={`${data.meta.playerId}-${data.meta.season}`}
+                className={styles.summarySection}
+                playerId={data.meta.playerId}
+                season={data.meta.season}
+                playerName={data.meta.player}
+              />
             )}
 
             {shots.length > 0 && (
