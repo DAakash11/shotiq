@@ -1,3 +1,13 @@
 fastapi==0.141.1
 uvicorn[standard]==0.52.2
 nba_api==1.11.4
+
+# The LLM summary (step 6). Only summary.py imports google-genai, so
+# swapping providers is a change to one module and this line.
+google-genai==2.18.1
+
+# Reads server/.env so the API key never has to be exported by hand.
+# Declared explicitly even though uvicorn[standard] already pulls it in:
+# depending on a transitive package means the day uvicorn drops it, the
+# app breaks for a reason nothing in this file explains.
+python-dotenv==1.2.2

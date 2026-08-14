@@ -9,6 +9,16 @@ different player without a rebuild.
 import os
 from datetime import date
 
+from dotenv import load_dotenv
+
+# Loaded here, at the top of the module everything else imports, so it runs
+# before any os.getenv call below. A .env read after the first getenv would
+# silently do nothing.
+#
+# Nothing in .env is optional-but-nice: it holds the LLM key. It is
+# gitignored, and .env.example documents the shape without the secret.
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 # Shai Gilgeous-Alexander, MVP of the 2025-26 season (his second in a row).
 DEFAULT_PLAYER_ID = int(os.getenv("SHOTIQ_PLAYER_ID", "1628983"))
 DEFAULT_SEASON = os.getenv("SHOTIQ_SEASON", "2025-26")
@@ -29,6 +39,15 @@ FIRST_SHOT_CHART_YEAR = 1996
 # from 2013-14, when SportVU cameras were installed in every arena.
 # Earlier seasons return empty result sets rather than an error.
 FIRST_TRACKING_YEAR = 2013
+
+
+# Whether the summary endpoint may call the LLM at all.
+#
+# Defaults to FALSE -- it fails closed. A hosted demo that forgets to set
+# anything serves only summaries already committed to the cache, so a
+# public URL can never be pointed at this project's quota. Turning it on is
+# a deliberate act, taken locally, by someone who can see the bill.
+SUMMARY_LIVE = os.getenv("SHOTIQ_SUMMARY_LIVE", "false").strip().lower() == "true"
 
 
 def latest_season_start_year(today=None):
