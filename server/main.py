@@ -2,8 +2,8 @@
 
 Two jobs:
   * serve NBA shot data for any player and season
-  * later, at step 6, proxy the LLM summary call so the API key never
-    reaches the browser
+  * proxy the LLM summary call, so the API key never reaches the browser
+    and the numbers in a summary are always this server's own
 
 Run locally:
     .venv\\Scripts\\python.exe -m uvicorn main:app --reload --port 8000
@@ -22,8 +22,26 @@ import summary as summary_service
 
 app = FastAPI(
     title="ShotIQ API",
-    description="NBA shot data for the ShotIQ dashboard.",
-    version="0.2.0",
+    description=(
+        "NBA shot data for the ShotIQ dashboard, plus an LLM scouting note "
+        "written only from that data.\n\n"
+        "Responses are cached to disk and served from there by default, so "
+        "the API works offline and never hammers stats.nba.com."
+    ),
+    version="0.3.0",
+    openapi_tags=[
+        {"name": "Shot data", "description": "Per-shot records and tracking splits."},
+        {"name": "Lookups", "description": "Offline player and season lists."},
+        {
+            "name": "AI summary",
+            "description": (
+                "A short scouting note. The model is given a digest computed "
+                "by this server and is instructed to use nothing else, so "
+                "every number in a summary traces back to the shot data."
+            ),
+        },
+        {"name": "Service", "description": "Health, and nothing that hits the network."},
+    ],
 )
 
 # In development the React app runs on :5173 and this API on :8000.
@@ -51,7 +69,7 @@ def _load_or_503(loader, player_id, season, refresh):
         ) from exc
 
 
-@app.get("/api/health")
+@app.get("/api/health", tags=["Service"], summary="Liveness check")
 def health():
     """Cheap liveness check that never touches stats.nba.com."""
     return {
@@ -64,7 +82,7 @@ def health():
     }
 
 
-@app.get("/api/players")
+@app.get("/api/players", tags=["Lookups"], summary="Search players by name")
 def get_players(
     q: str = Query(..., min_length=2, description="Part of a player's name"),
 ):
@@ -76,7 +94,7 @@ def get_players(
     return {"query": q, "players": nba_source.search_players(q)}
 
 
-@app.get("/api/seasons")
+@app.get("/api/seasons", tags=["Lookups"], summary="Seasons with shot-chart data")
 def get_seasons():
     """Seasons with shot-chart data, newest first.
 
@@ -89,7 +107,7 @@ def get_seasons():
     }
 
 
-@app.get("/api/shots")
+@app.get("/api/shots", tags=["Shot data"], summary="Every field-goal attempt")
 def get_shots(
     playerId: int | None = Query(None, description="Defaults to the featured player"),
     season: str | None = Query(None, description="e.g. 2025-26"),
@@ -99,7 +117,7 @@ def get_shots(
     return _load_or_503(nba_source.load_shots, playerId, season, refresh)
 
 
-@app.get("/api/splits")
+@app.get("/api/splits", tags=["Shot data"], summary="Tracking splits")
 def get_splits(
     playerId: int | None = Query(None, description="Defaults to the featured player"),
     season: str | None = Query(None, description="e.g. 2025-26"),
@@ -110,6 +128,50 @@ def get_splits(
     Seasons before 2013-14 predate player tracking and return empty splits.
     """
     return _load_or_503(nba_source.load_splits, playerId, season, refresh)
+
+
+class SummaryMeta(BaseModel):
+    """Provenance. Every field here answers 'where did this text come from?'
+
+    Optional almost throughout, on purpose: a summary cached by an earlier
+    version of this code must still deserialise rather than 500. A response
+    model that rejects its own older files is a trap, not a contract.
+    """
+
+    # 'model' collides with Pydantic's protected model_ namespace, and the
+    # field is named for the LLM, not for Pydantic.
+    model_config = {"protected_namespaces": ()}
+
+    source: str = Field(description="'cache' or 'live'")
+    model: str | None = Field(None, description="The LLM that wrote it")
+    generatedAt: str | None = None
+    digest: str | None = Field(
+        None, description="Fingerprint of the numbers this described"
+    )
+    stale: bool | None = Field(
+        None,
+        description=(
+            "Present and true when the shot data has changed since this "
+            "summary was written. The text is kept, not discarded."
+        ),
+    )
+    playerId: int | None = None
+    player: str | None = None
+    season: str | None = None
+
+
+class SummaryResponse(BaseModel):
+    """What the panel renders.
+
+    Declared so /docs shows the shape rather than an empty schema, and so
+    the endpoint cannot quietly start returning something else.
+    """
+
+    headline: str = Field(description="One sentence, at most 18 words")
+    strengths: list[str] = Field(description="Two or three, each with numbers")
+    watch: list[str] = Field(description="One or two genuine concerns")
+    context: str = Field(description="Two or three sentences on shot diet")
+    meta: SummaryMeta
 
 
 class SummaryRequest(BaseModel):
@@ -131,7 +193,31 @@ class SummaryRequest(BaseModel):
     season: str | None = Field(None, description="e.g. 2025-26")
 
 
-@app.post("/api/summary")
+@app.post(
+    "/api/summary",
+    response_model=SummaryResponse,
+    tags=["AI summary"],
+    summary="Generate or fetch an AI scouting note",
+    # FastAPI documents 200 and its own 422 automatically. The rest are
+    # ours, and an undocumented error code is one a client author only
+    # discovers in production.
+    responses={
+        400: {"description": "Malformed season string"},
+        422: {
+            "description": (
+                "The body carried an unknown field, or the season has no "
+                "recorded attempts to summarise"
+            )
+        },
+        502: {"description": "The model answered, but not with a usable summary"},
+        503: {
+            "description": (
+                "Nothing is cached and this deployment may not spend quota "
+                "(SHOTIQ_SUMMARY_LIVE is not 'true')"
+            )
+        },
+    },
+)
 def post_summary(
     body: SummaryRequest | None = None,
     refresh: bool = Query(False, description="Regenerate even if one is cached"),
