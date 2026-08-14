@@ -183,6 +183,13 @@ function DistanceChart({ bands, playerName }) {
             data={shooting}
             margin={{ top: 4, right: 12, bottom: 16, left: 0 }}
             barCategoryGap={14}
+            // Recharts otherwise renders the <svg> as role="application"
+            // with tabindex="0". Inside the aria-hidden wrapper above, that
+            // is a keyboard trap in miniature: a Tab lands on an element
+            // deliberately hidden from screen readers, so it announces
+            // nothing. The text summary above replaces it, and says more
+            // than the built-in layer would.
+            accessibilityLayer={false}
           >
             {/* Vertical rules only. Horizontal ones would cut through the
                 bars they are meant to sit behind. */}

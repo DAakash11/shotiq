@@ -71,6 +71,18 @@ describe('DistanceChart', () => {
     expect(ticks).toHaveLength(2)
   })
 
+  it('keeps the decorative svg out of the tab order', async () => {
+    // Recharts renders <svg role="application" tabindex="0"> by default.
+    // Inside the aria-hidden wrapper that is a focus trap in miniature:
+    // keyboard users land on a node deliberately hidden from their screen
+    // reader, so it announces nothing at all.
+    const host = await render(<DistanceChart bands={bands} playerName="Test Player" />)
+
+    const hidden = host.querySelector('[aria-hidden="true"]')
+    expect(hidden).not.toBeNull()
+    expect(hidden.querySelectorAll('[tabindex]:not([tabindex="-1"])')).toHaveLength(0)
+  })
+
   it('renders nothing at all for a player with no attempts', async () => {
     const empty = shootingByDistance([], [])
     const host = await render(<DistanceChart bands={empty} playerName="Nobody" />)
@@ -125,5 +137,12 @@ describe('SplitChart', () => {
     const host = await render(<SplitChart rows={[]} playerName="Test Player" />)
 
     expect(host.querySelector('svg')).toBeNull()
+  })
+
+  it('keeps the decorative svg out of the tab order', async () => {
+    const host = await render(<SplitChart rows={rows} playerName="Test Player" />)
+
+    const hidden = host.querySelector('[aria-hidden="true"]')
+    expect(hidden.querySelectorAll('[tabindex]:not([tabindex="-1"])')).toHaveLength(0)
   })
 })

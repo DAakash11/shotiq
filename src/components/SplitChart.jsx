@@ -95,6 +95,9 @@ function SplitChart({ rows, baseline, axisLabel, bucketLabel, playerName }) {
           <BarChart
             data={plotted}
             margin={{ top: 24, right: 8, bottom: 20, left: 8 }}
+            // See DistanceChart: keeps the decorative <svg> out of the tab
+            // order, since the text summary above carries the same content.
+            accessibilityLayer={false}
           >
             <XAxis
               dataKey="label"
