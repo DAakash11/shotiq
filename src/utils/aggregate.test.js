@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -170,6 +171,39 @@ describe('splitSeries', () => {
   it('returns an empty series for a season with no tracking data', () => {
     expect(splitSeries(undefined)).toEqual([])
     expect(splitSeries([])).toEqual([])
+  })
+})
+
+/* The numbers below are also asserted, to the same precision, by
+   server/tests/test_analytics.py against this same file.
+
+   server/analytics.py duplicates this module in Python, because the summary
+   endpoint must re-derive its own numbers rather than trust anything the
+   client posts. Two implementations can drift silently, so both are pinned
+   to one real fixture: change either one in a way that moves these values
+   and exactly one suite goes red, naming the side that moved. */
+describe('agreement with the Python twin', () => {
+  const cache = (name) =>
+    JSON.parse(readFileSync(new URL(`../../server/cache/${name}`, import.meta.url), 'utf-8'))
+
+  const shotsPayload = cache('shots-1628983-2025-26.json')
+  const bands = shootingByDistance(shotsPayload.shots, shotsPayload.leagueAverages)
+
+  it('pins the 8-16 ft band for the default subject', () => {
+    const band = bandOf(bands, '8-16 ft')
+
+    expect(band.fgPct).toBeCloseTo(0.573, 3)
+    expect(band.leagueFgPct).toBeCloseTo(0.446, 3)
+    expect(band.diff * 100).toBeCloseTo(12.7, 1)
+  })
+
+  it('accounts for every attempt in the season', () => {
+    // Backcourt heaves are excluded by design, and he took none in 2025-26,
+    // so the bands should add up to the season total exactly.
+    const total = bands.reduce((sum, band) => sum + band.attempts, 0)
+
+    expect(total).toBe(shotsPayload.meta.attempts)
+    expect(total).toBe(1321)
   })
 })
 
