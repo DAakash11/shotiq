@@ -22,9 +22,16 @@ dist
 # in the image permanently -- deleting it in a later layer does not remove
 # it, it just hides it from the final filesystem. .env.example carries the
 # shape without the secret and is allowed through.
-.env
-.env.*
-!.env.example
+#
+# The ** matters, and its absence was a real bug: these patterns are
+# matched against paths relative to the CONTEXT ROOT, so a bare `.env`
+# matches only /.env. The file that actually holds the key is
+# server/.env, which sailed straight past it and into the image. Verified
+# now by grepping the running container rather than by reading this file
+# and believing it.
+**/.env
+**/.env.*
+!**/.env.example
 
 # Not needed at runtime. The production image ships no test runner, which is
 # also why requirements-dev.txt stays out.
