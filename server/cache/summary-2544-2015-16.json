@@ -1,0 +1,18 @@
+{
+ "headline": "Elite high-volume finishing inside eight feet anchored an otherwise inefficient perimeter and pull-up season.",
+ "strengths": [
+  "From less than 8 feet, he made 66.2% of his 784 attempts, which was 10.7 percentage points above the league average on that range.",
+  "In the 22-18 second segment of the shot clock, he converted 74.5% of his 231 attempts, representing 16.3% of his total shot selection."
+ ],
+ "watch": [
+  "On pull-up attempts, which comprised 30.9% of his offense (436 attempts), he shot just 34.2%.",
+  "From 24 feet and beyond, he converted 31.0% of his 281 attempts, finishing 4.7 percentage points below the league average on that same range."
+ ],
+ "context": "Shots from less than 10 feet formed the foundation of his offense, accounting for 56.1% of all attempts (793 shots). He faced tight coverage between 2 and 4 feet on 37.4% of his attempts (529 shots) and very tight coverage on 20.9% (296 shots). The largest portion of his timing distribution fell in the average shot-clock window between 15 and 7 seconds, which accounted for 36.3% of his volume (513 shots).",
+ "meta": {
+  "model": "gemini-3.7-flash",
+  "generatedAt": "2026-08-15T12:44:38+00:00",
+  "digest": "8b87340f5c17",
+  "source": "live"
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "headline": "Dominant interior scoring and exceptional mid-range accuracy defined Jokić's high-efficiency shooting season.",
+ "strengths": [
+  "From less than 8 feet, Jokić made 68.3% of his 804 attempts, which was 9.3 points above the league average on the same range.",
+  "From 8 to 16 feet, he converted 57.0% of his 158 attempts, exceeding the league average on the same range by 14.0 points."
+ ],
+ "watch": [
+  "From 24 or more feet, he converted 34.0% of his 285 attempts, finishing 1.5 points below the league average on the same range."
+ ],
+ "context": "Shots from less than 10 feet comprised 64.5% of his total diet across 846 attempts. He took 55.8% of his field goals under tight coverage with a defender 2 to 4 feet away. Just over half of his total volume, 51.4%, occurred in the middle of the shot clock between 15 and 7 seconds.",
+ "meta": {
+  "model": "gemini-3.7-flash",
+  "generatedAt": "2026-08-15T12:20:50+00:00",
+  "digest": "7f2b8b6475bf",
+  "source": "live"
+ }
+}

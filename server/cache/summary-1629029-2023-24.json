@@ -1,0 +1,17 @@
+{
+ "headline": "Elite finishing inside eight feet and high-volume pull-up shooting defined Dončić's season.",
+ "strengths": [
+  "From less than 8 feet, he converted 69.4% of his 441 attempts, finishing 9.6 percentage points above the league average on the same range.",
+  "From 24+ feet, he hit 38.4% across 739 attempts, which was 1.7 percentage points above the league average on that range."
+ ],
+ "watch": [
+  "On 143 catch-and-shoot attempts, he converted only 36.4% of his field goals."
+ ],
+ "context": "Pull-up jumpers comprised 61.0% of his shot selection, and 739 of his 1652 total field goal attempts came from 24+ feet. Defensively, 48.2% of his attempts came against open coverage at 4-6 feet and 36.4% against tight coverage at 2-4 feet. Over half of his attempts (53.7%) were taken in the middle of the shot clock between 15-7 seconds.",
+ "meta": {
+  "model": "gemini-3.7-flash",
+  "generatedAt": "2026-08-15T12:45:31+00:00",
+  "digest": "a9e43d8282b8",
+  "source": "live"
+ }
+}

@@ -22,12 +22,20 @@ __pycache__/
 # is the offline fallback that keeps the dashboard working when
 # stats.nba.com is unreachable.
 server/cache/*
-!server/cache/shots-1628983-2025-26.json
-!server/cache/splits-1628983-2025-26.json
-# The generated summary ships too, so the AI panel works for anyone who
-# clones this without an API key -- and so a hosted demo can serve it with
-# SHOTIQ_SUMMARY_LIVE left off.
-!server/cache/summary-1628983-2025-26.json
+# The featured subjects ship in full -- shots, splits and the generated
+# summary -- so the whole app, AI panel included, works offline for anyone
+# who clones this without an API key, and so a hosted demo can serve them
+# with SHOTIQ_SUMMARY_LIVE left off.
+#
+# One line per subject rather than three: the wildcard covers shots-,
+# splits- and summary- while still naming the exact player and season, so
+# no other locally cached player is swept in by accident. Roughly 3 MB in
+# total, which is the price of a demo that needs no network and no key.
+!server/cache/*-1628983-2025-26.json
+!server/cache/*-203999-2021-22.json
+!server/cache/*-201939-2016-17.json
+!server/cache/*-2544-2015-16.json
+!server/cache/*-1629029-2023-24.json
 
 # Environment — never commit real keys
 .env

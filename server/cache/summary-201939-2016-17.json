@@ -1,0 +1,18 @@
+{
+ "headline": "High-volume 24+ foot efficiency and elite catch-and-shoot conversion anchored his scoring profile.",
+ "strengths": [
+  "From 24+ feet, he converted 41.9% of his 768 attempts, finishing 5.9 percentage points above the league average on that same range.",
+  "On catch-and-shoot chances, which accounted for 28.7% of his offense across 414 attempts, he posted an effective field goal percentage of 66.7% and a 46.4% field goal percentage.",
+  "From 16-24 feet, he made 45.5% of his 167 shots, outperforming the league average at that distance by 5.2 percentage points."
+ ],
+ "watch": [
+  "Pull-up shots represented his largest share of attempts at 42.5% (613 shots) but generated his lowest accuracy among general shot types at 39.0% from the floor."
+ ],
+ "context": "The majority of his offense came from deep, with 768 of his 1443 attempts originating from 24+ feet alongside 389 attempts from less than 8 feet. Defenses gave him space on most looks, as 60.0% of his shots came with a defender 4 or more feet away (34.8% open and 25.2% wide open). His attempts were also concentrated early, with 47.2% of total shots taken within the first nine seconds of the shot clock.",
+ "meta": {
+  "model": "gemini-3.7-flash",
+  "generatedAt": "2026-08-15T12:51:51+00:00",
+  "digest": "b93f12f24a13",
+  "source": "live"
+ }
+}

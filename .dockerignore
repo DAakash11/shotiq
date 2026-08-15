@@ -53,7 +53,14 @@ README.md
 # with no API key and no network. But only the default subject's files, so
 # the image is identical no matter whose machine built it. Any other cached
 # player is a local artefact, not part of the project.
+#
+# Kept in step with .gitignore: the same five subjects, so the image
+# contains exactly what the repository does and is identical regardless of
+# whose machine built it. Any other locally cached player is a local
+# artefact and stays out.
 server/cache/*
-!server/cache/shots-1628983-2025-26.json
-!server/cache/splits-1628983-2025-26.json
-!server/cache/summary-1628983-2025-26.json
+!server/cache/*-1628983-2025-26.json
+!server/cache/*-203999-2021-22.json
+!server/cache/*-201939-2016-17.json
+!server/cache/*-2544-2015-16.json
+!server/cache/*-1629029-2023-24.json

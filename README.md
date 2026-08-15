@@ -74,9 +74,20 @@ docker compose up --build
 
 Then open **http://localhost:8080**.
 
-The AI summary works immediately, with no API key — the generated note for the
-default player is committed alongside the shot data it describes, so a fresh
-clone gets the whole feature offline.
+The AI summary works immediately, with no API key. Five seasons ship complete —
+shot data, tracking splits and the generated note — so a fresh clone gets the
+whole feature offline:
+
+| Player | Season | |
+| --- | --- | --- |
+| Shai Gilgeous-Alexander | 2025-26 | back-to-back MVP, the default subject |
+| Nikola Jokić | 2021-22 | second straight MVP |
+| Stephen Curry | 2016-17 | 768 attempts from 24+ feet |
+| LeBron James | 2015-16 | the Cleveland title season |
+| Luka Dončić | 2023-24 | scoring title |
+
+Any other player and season still works, but needs a live fetch from
+`stats.nba.com`, and a summary for one needs an API key.
 
 | | |
 | --- | --- |
