@@ -140,6 +140,39 @@ class TestSeasons:
 
 
 @pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Make any real call to stats.nba.com fail loudly.
+
+    The committed cache means the data endpoints resolve from disk, and one
+    test asserts meta.source == "cache" to prove it. That guard only covers
+    the paths it exercises, and it missed one: a test stubbing load_shots
+    but not load_splits sent the summary route to the network for real,
+    which showed up months later as a stray splits-1-2016-17.json in the
+    cache directory with "source": "live" in it.
+
+    Nothing announced that. The test passed, because the route is designed
+    to survive missing splits.
+
+    So the rule is enforced here rather than trusted: the fetchers raise,
+    which stops the call reaching the network at all. Note what this does
+    NOT do. The summary route catches Exception around its splits load on
+    purpose -- a tracking failure should cost you the splits, not the
+    summary -- so it swallows this guard too and the test still passes.
+    The guard keeps the suite offline; it cannot also make every such test
+    announce itself. Tests that mean to skip splits should say so by
+    stubbing the loader, as the empty-season one below now does.
+    """
+
+    def explode(*args, **kwargs):
+        raise AssertionError(
+            "a test tried to reach stats.nba.com -- stub the loader instead"
+        )
+
+    monkeypatch.setattr(nba_source, "_fetch_shots", explode)
+    monkeypatch.setattr(nba_source, "_fetch_splits", explode)
+
+
+@pytest.fixture(autouse=True)
 def generation_off(monkeypatch):
     """Force live generation off for every test in this module.
 
@@ -264,6 +297,13 @@ class TestSummary:
             "leagueAverages": [],
         }
         monkeypatch.setattr(nba_source, "load_shots", lambda *a, **k: empty)
+        # Stubbed too, and this is the bug this test used to have: without
+        # it the route went to stats.nba.com for real, because the payload
+        # above says hasTracking. It passed regardless, and left a
+        # splits-1-2016-17.json behind as the only evidence.
+        monkeypatch.setattr(
+            nba_source, "load_splits", lambda *a, **k: {"meta": {}, "splits": {}}
+        )
         monkeypatch.setattr(config, "SUMMARY_LIVE", True)
 
         response = client.post(
