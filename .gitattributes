@@ -1,0 +1,30 @@
+# Line endings.
+#
+# Git has been warning "LF will be replaced by CRLF" on every commit in this
+# repo. That is core.autocrlf doing its default Windows thing: store LF, hand
+# the working tree CRLF. Harmless while everything runs on Windows, and not
+# harmless at all once these files are copied into a Linux container, where a
+# CRLF in a shell script produces errors like "/bin/sh^M: bad interpreter"
+# that name a file which looks perfectly fine in an editor.
+#
+# eol=lf settles it: LF in the repository and LF in the working tree, on
+# every platform. Modern Windows editors -- VS Code included -- handle LF
+# without complaint, and the files that end up in a Docker image are then
+# byte-identical to the ones committed.
+* text=auto eol=lf
+
+# Binary files must never be touched. Listing them explicitly protects them
+# even if the detection above ever guesses wrong.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+
+# Cached API responses are data, not source. They are JSON so the rule above
+# would already normalise them, which is fine -- this is here to say that is
+# deliberate, so a diff on a cache file is never a line-ending diff.
+server/cache/*.json text eol=lf

@@ -1,0 +1,52 @@
+# Everything here is excluded from the build context -- the tarball the CLI
+# uploads to the Docker daemon before a build starts. Without this file that
+# upload is roughly 300 MB across 19,000 files, almost all of it dependency
+# trees the image rebuilds from lockfiles anyway.
+
+# 108 MB. Reinstalled inside the image from package-lock.json, and a host
+# node_modules can carry native binaries built for Windows.
+node_modules
+
+# 192 MB, and actively harmful: it contains Windows binaries
+# (Scripts/python.exe, .pyd files) that mean nothing to a Linux container.
+# The image builds its own environment from requirements.txt.
+server/.venv
+**/__pycache__
+**/*.pyc
+
+# Built by the image, never copied into it. Shipping a host build would
+# silently override the one the Dockerfile just made.
+dist
+
+# NEVER let a key into the build context. Anything copied into a layer is
+# in the image permanently -- deleting it in a later layer does not remove
+# it, it just hides it from the final filesystem. .env.example carries the
+# shape without the secret and is allowed through.
+.env
+.env.*
+!.env.example
+
+# Not needed at runtime. The production image ships no test runner, which is
+# also why requirements-dev.txt stays out.
+**/*.test.js
+**/*.test.jsx
+server/tests
+server/requirements-dev.txt
+
+# Development-only tooling and history.
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+README.md
+.oxlintrc.json
+
+# The cache is deliberately included -- it is what makes the container work
+# with no API key and no network. But only the default subject's files, so
+# the image is identical no matter whose machine built it. Any other cached
+# player is a local artefact, not part of the project.
+server/cache/*
+!server/cache/shots-1628983-2025-26.json
+!server/cache/splits-1628983-2025-26.json
+!server/cache/summary-1628983-2025-26.json
