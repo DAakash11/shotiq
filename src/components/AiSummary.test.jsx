@@ -91,6 +91,22 @@ describe('AiSummary', () => {
     expect(text).toContain('Pull-ups account for 57.2%')
   })
 
+  it('labels the two lists by the role they play, not by a topic', async () => {
+    // Regression test. The `watch` field holds whatever the data shows to
+    // be a genuine weakness: a shot-clock bucket for one player, a
+    // distance band for another. A topic-specific heading is therefore
+    // wrong for every summary whose concern happens to be about something
+    // else -- and nothing else in the suite would notice, because the
+    // items themselves still render correctly underneath it.
+    vi.stubGlobal('fetch', async () => jsonResponse(SUMMARY))
+
+    await render(<AiSummary playerId={1} season="2025-26" />)
+    await clickButton()
+
+    const headings = [...host.querySelectorAll('h4')].map((h) => h.textContent)
+    expect(headings).toEqual(['Strengths', 'Concerns'])
+  })
+
   it('says who wrote it', async () => {
     // A reader should never have to wonder whether a person wrote this.
     vi.stubGlobal('fetch', async () => jsonResponse(SUMMARY))

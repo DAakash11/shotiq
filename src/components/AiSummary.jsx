@@ -163,7 +163,12 @@ function AiSummary({ playerId, season, playerName, className = '' }) {
             </div>
 
             <div>
-              <h4 className={styles.listHeading}>Watch</h4>
+              {/* Names the ROLE this list plays, not a topic. The `watch`
+                  field holds whatever the data shows to be a genuine
+                  weakness -- a distance band for one player, the shot
+                  clock for another -- so a topic-specific heading would be
+                  wrong the moment the model found a different concern. */}
+              <h4 className={styles.listHeading}>Concerns</h4>
               <ul className={styles.list}>
                 {summary.watch.map((item) => (
                   <li key={item}>{item}</li>
