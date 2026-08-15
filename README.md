@@ -35,6 +35,15 @@ On macOS or Linux the venv binary is `.venv/bin/python` instead.
 
 Interactive API docs are at http://localhost:8000/docs.
 
+### 2. Frontend — second terminal
+
+```
+npm install
+npm run dev
+```
+
+Vite prints a local URL (http://localhost:5173 by default) and proxies `/api` through to the Python service.
+
 ### Optional — generating new AI summaries
 
 The summary for the default subject is committed, so the feature works with no
@@ -55,14 +64,53 @@ is read by the Python service alone — it is never sent to the browser, and it
 must never be named with a `VITE_` prefix, because Vite inlines those into the
 client bundle at build time.
 
-### 2. Frontend — second terminal
+## Run with Docker
+
+One command, no Node and no Python on the host:
 
 ```
-npm install
-npm run dev
+docker compose up --build
 ```
 
-Vite prints a local URL (http://localhost:5173 by default) and proxies `/api` through to the Python service.
+Then open **http://localhost:8080**.
+
+The AI summary works immediately, with no API key — the generated note for the
+default player is committed alongside the shot data it describes, so a fresh
+clone gets the whole feature offline.
+
+| | |
+| --- | --- |
+| `web` | nginx serving the built React app, published on 8080 |
+| `api` | FastAPI on uvicorn, **not** published — reachable only from `web` |
+
+Only nginx is exposed. The browser calls `/api/...` with no host in the path,
+exactly as it does behind Vite's proxy in development, and nginx forwards those
+to the API container by service name over the compose network. Nothing in the
+frontend bundle knows where the API lives, so no build-time environment
+variable has to be set per deployment.
+
+Some details that are load-bearing rather than decorative:
+
+- **The frontend image is multi-stage.** Building needs Node, npm and ~110 MB of
+  packages; serving needs a web server and a directory of files. The build stage
+  is discarded entirely, so the shipped image is 93 MB of nginx and static
+  assets with no Node, no source and no `node_modules` in it.
+- **The API image is Debian-based, not Alpine.** `nba_api` depends on pandas and
+  numpy, which are compiled C extensions. Alpine's musl libc cannot use the
+  prebuilt manylinux wheels, so pip would build both from source — a toolchain
+  and many minutes to reach what Debian installs in seconds.
+- **nginx's proxy timeout is raised to 120s.** It defaults to 60s, while the API
+  allows itself 90s to reach `stats.nba.com`. A genuinely slow first fetch for
+  an uncached player would otherwise be cut off by nginx and returned as a 504
+  while the API was still waiting quite happily.
+- **`web` waits for `api` to report healthy**, not merely to exist, so the first
+  request cannot arrive while uvicorn is still importing pandas.
+- **The cache is a named volume**, seeded from the image on first run, so players
+  fetched inside the container survive it being replaced.
+- **`.env` never enters an image.** It is excluded from the build context and
+  passed at runtime instead. Anything copied into a layer stays in that layer
+  permanently — deleting it in a later step hides it from the final filesystem
+  without removing it from the image.
 
 ## Tests
 

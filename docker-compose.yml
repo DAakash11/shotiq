@@ -1,0 +1,68 @@
+# Both halves of ShotIQ, on one network.
+#
+#     docker compose up --build
+#     open http://localhost:8080
+#
+# No `version:` key -- it has been obsolete since Compose v2 and now only
+# produces a warning.
+
+services:
+  api:
+    build:
+      # Context is the repository root for both images, so a single
+      # .dockerignore governs what reaches the daemon.
+      context: .
+      dockerfile: server/Dockerfile
+
+    # expose, not ports: the API is reachable from the web container on the
+    # shared network but is NOT published to the host. nginx is the only
+    # way in, which is what makes the frontend's relative /api paths the
+    # real production arrangement rather than a development convenience.
+    # Publish it temporarily if you want to hit /docs directly.
+    expose:
+      - "8000"
+
+    # Optional, and it must stay optional: the whole point of committing
+    # the cached summary is that this runs with no key at all. Someone who
+    # has created server/.env gets their key passed through at runtime,
+    # never baked into an image layer.
+    env_file:
+      - path: ./server/.env
+        required: false
+
+    # SHOTIQ_SUMMARY_LIVE is deliberately NOT set here. config.py defaults
+    # it to false, so the fail-closed behaviour has one definition rather
+    # than two that can disagree -- and setting it here would override the
+    # developer's own .env, which is the opposite of helpful.
+
+    # Named volume seeded from the image. Docker copies the image's
+    # contents into an empty named volume on first mount, so this starts
+    # with the committed cache and then keeps anything fetched afterwards
+    # instead of losing it when the container is replaced.
+    volumes:
+      - shotiq-cache:/app/cache
+
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # 8080 rather than 80, which usually needs privileges on the host and
+    # is often already taken.
+    ports:
+      - "8080:80"
+
+    # Waits for the API's HEALTHCHECK to pass, not merely for its container
+    # to exist. Without the condition, nginx can start while uvicorn is
+    # still importing pandas, and the first request through /api gets a
+    # 502 from a service that was simply not ready yet.
+    depends_on:
+      api:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+volumes:
+  shotiq-cache:
