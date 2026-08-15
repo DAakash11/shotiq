@@ -163,6 +163,30 @@ class TestSplitSeries:
 
         assert [row["bucket"] for row in rows] == ["2-4 Feet - Tight"]
 
+    def test_drops_the_unlabelled_shot_clock_off_bucket(self):
+        # The real row, from LeBron's 2015-16 splits: stats.nba.com reports
+        # attempts taken with the shot clock off under a null range with a
+        # null sortOrder, carrying real attempts and zero makes. 69 is
+        # above MIN_ATTEMPTS so it would NOT be flagged as a thin sample --
+        # the model would be handed a confident 0.0% on a bucket with no
+        # name, which it can only misdescribe.
+        rows = analytics.split_series(
+            [
+                {"label": None, "sortOrder": None, "fga": 69, "fgm": 0, "fgPct": 0.0},
+                {"label": "24-22", "sortOrder": 1, "fga": 58, "fgm": 36, "fgPct": 0.621},
+            ]
+        )
+
+        assert [row["bucket"] for row in rows] == ["24-22"]
+
+    @pytest.mark.parametrize("label", [None, "", "   "])
+    def test_drops_any_bucket_without_a_usable_name(self, label):
+        rows = analytics.split_series(
+            [{"label": label, "fga": 40, "fgm": 20, "fgPct": 0.5}]
+        )
+
+        assert rows == []
+
     def test_preserves_the_order_it_was_given(self):
         # nba_source has already sorted these by SORT_ORDER, which encodes
         # the meaningful sequence (shot clock 24-22 before 4-0).

@@ -143,12 +143,25 @@ def split_series(rows):
         if not attempts:
             continue
 
+        # stats.nba.com emits an unlabelled shot-clock row -- null range,
+        # null sortOrder -- for attempts taken with the shot clock off.
+        # It arrives with real attempts and zero makes: 69 attempts at
+        # 0.0% on LeBron's 2015-16, above MIN_ATTEMPTS and so not flagged
+        # as a thin sample. Handing that to a model is handing it a
+        # confident, meaningless, nameless statistic; a bucket with no
+        # name cannot be described, only misdescribed.
+        # Stripped, because a whitespace-only label is truthy and would
+        # sail through an emptiness check while still being no name at all.
+        label = str(row.get("label") or "").strip()
+        if not label:
+            continue
+
         series.append(
             {
                 # The full descriptive label, unlike the chart's shortened
                 # axis tick: '0-2 Feet - Very Tight' tells a model what the
                 # bucket means, where '0-2 ft' makes it infer.
-                "bucket": row.get("label"),
+                "bucket": label,
                 "attempts": attempts,
                 "made": row.get("fgm") or 0,
                 "fgPct": _round(row.get("fgPct")),

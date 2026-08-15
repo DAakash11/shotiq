@@ -100,19 +100,28 @@ export function shortLabel(label) {
 /** Normalise one tracking split (defender distance, shot clock, ...) into a
  *  chart series. Rows arrive from the API already in sortOrder. */
 export function splitSeries(rows) {
-  return (rows ?? []).map((row) => {
-    const attempts = row.fga ?? 0
-    return {
-      label: shortLabel(row.label),
-      fullLabel: row.label,
-      attempts,
-      made: row.fgm ?? 0,
-      // Left as null where the player took no such shot. The API is
-      // explicit about this and the chart must not redraw it as 0%.
-      fgPct: row.fgPct ?? null,
-      efgPct: row.efgPct ?? null,
-      frequency: row.frequency ?? null,
-      isLowSample: attempts > 0 && attempts < MIN_ATTEMPTS,
-    }
-  })
+  return (rows ?? [])
+    /* stats.nba.com emits an unlabelled shot-clock row -- null range, null
+       sortOrder -- for attempts taken with the shot clock off. It carries
+       real attempts and zero makes, and 0 is not null, so it survives the
+       fgPct check in SplitChart and draws a zero-height bar under a blank
+       axis tick. A bucket with no name cannot be plotted honestly. */
+    /* Trimmed, because a whitespace-only label is truthy and would pass a
+       plain emptiness check while still being no name at all. */
+    .filter((row) => String(row.label ?? '').trim())
+    .map((row) => {
+      const attempts = row.fga ?? 0
+      return {
+        label: shortLabel(row.label),
+        fullLabel: row.label,
+        attempts,
+        made: row.fgm ?? 0,
+        // Left as null where the player took no such shot. The API is
+        // explicit about this and the chart must not redraw it as 0%.
+        fgPct: row.fgPct ?? null,
+        efgPct: row.efgPct ?? null,
+        frequency: row.frequency ?? null,
+        isLowSample: attempts > 0 && attempts < MIN_ATTEMPTS,
+      }
+    })
 }

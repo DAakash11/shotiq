@@ -172,6 +172,27 @@ describe('splitSeries', () => {
     expect(splitSeries(undefined)).toEqual([])
     expect(splitSeries([])).toEqual([])
   })
+
+  it.each([null, undefined, '', '   '])(
+    'drops a bucket labelled %p, which cannot be plotted honestly',
+    (label) => {
+      // The real case, from LeBron's 2015-16 splits: stats.nba.com reports
+      // attempts taken with the shot clock OFF under a null range. It
+      // carries 69 real attempts and zero makes, and 0 is not null, so it
+      // survives SplitChart's fgPct check and draws a zero-height bar
+      // under a blank axis tick.
+      expect(splitSeries([{ label, fga: 69, fgm: 0, fgPct: 0 }])).toEqual([])
+    },
+  )
+
+  it('keeps the labelled buckets beside a dropped one', () => {
+    const rows = splitSeries([
+      { label: null, fga: 69, fgm: 0, fgPct: 0 },
+      { label: '24-22', fga: 58, fgm: 36, fgPct: 0.621 },
+    ])
+
+    expect(rows.map((row) => row.fullLabel)).toEqual(['24-22'])
+  })
 })
 
 /* The numbers below are also asserted, to the same precision, by
