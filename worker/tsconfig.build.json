@@ -1,0 +1,14 @@
+{
+  // The BUILD config: same rules, but it emits, and the tests do not ship.
+  //
+  // Two configs rather than one because the two jobs genuinely disagree.
+  // Type-checking wants to see the tests -- they are the code most likely to
+  // drift when a type changes. The build wants them gone, for the same
+  // reason .dockerignore already excludes server/tests: a production image
+  // that contains no test runner cannot accidentally run one.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false
+  },
+  "exclude": ["src/**/*.test.ts"]
+}

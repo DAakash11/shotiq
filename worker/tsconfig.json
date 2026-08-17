@@ -1,0 +1,60 @@
+{
+  // The type-CHECKING config. Covers everything under src/, tests included,
+  // and emits nothing -- `npm run typecheck` is a pure verification pass.
+  // tsconfig.build.json extends this to produce the JavaScript that Node
+  // actually runs, and drops the tests on the way out.
+  "compilerOptions": {
+    // Node 22 supports every ES2022 feature natively, so there is nothing to
+    // gain by down-levelling. Targeting an older version would make tsc
+    // rewrite modern syntax into slower equivalents for a runtime that never
+    // needed the help.
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    // NodeNext means "resolve imports exactly the way Node does". Combined
+    // with "type": "module" in package.json this makes the emitted code real
+    // ESM. The cost is that relative imports must carry a .js extension even
+    // though the source file is .ts -- see the note in jobId.test.ts. That is
+    // not a TypeScript quirk; it is Node's ESM rule, and tsc is refusing to
+    // paper over it.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    "rootDir": "src",
+    "outDir": "dist",
+
+    // The whole point of the exercise. One flag that turns on ~8 others,
+    // the important ones being noImplicitAny (an untyped parameter is an
+    // error, not a silent `any`) and strictNullChecks (a value that can be
+    // null must be proven non-null before use).
+    "strict": true,
+
+    // Not part of strict, and the one I would add to any project. Without
+    // it, `arr[99]` on a 3-element array types as the element type rather
+    // than possibly-undefined, so TypeScript cheerfully signs off on a
+    // read that returns undefined at runtime.
+    "noUncheckedIndexedAccess": true,
+
+    // Unused locals and parameters are errors. Cheap, and it catches the
+    // half-finished refactor.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    // Every switch case must return or break. A fallthrough is nearly
+    // always a missing `break` rather than an intention.
+    "noFallthroughCasesInSwitch": true,
+
+    // Skip type-checking inside node_modules' .d.ts files. Those are not
+    // our code and a single bad one from a transitive dependency would
+    // otherwise fail our build.
+    "skipLibCheck": true,
+
+    // Line numbers in a stack trace point at the .ts file, not the emitted
+    // .js. Worth having the moment a job throws inside a container.
+    "sourceMap": true,
+
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src"]
+}

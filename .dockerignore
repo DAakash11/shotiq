@@ -7,6 +7,16 @@
 # node_modules can carry native binaries built for Windows.
 node_modules
 
+# The worker service's own dependency tree. Listed separately and NOT
+# covered by the line above, for the same reason server/.env was not
+# covered by a bare `.env`: these patterns match against paths relative to
+# the CONTEXT ROOT, so `node_modules` matches only /node_modules. The api
+# and web images both build with context `.`, so without these two lines
+# they would upload the worker's tree on every build despite having no use
+# for it. The worker image builds from its own context and never sees this.
+worker/node_modules
+worker/dist
+
 # 192 MB, and actively harmful: it contains Windows binaries
 # (Scripts/python.exe, .pyd files) that mean nothing to a Linux container.
 # The image builds its own environment from requirements.txt.
