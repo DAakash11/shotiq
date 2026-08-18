@@ -16,6 +16,11 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
+    // Installs the network guard for every unit test. See
+    // src/testing/noNetwork.ts -- it throws AND records, because the HTTP
+    // client catches broadly enough to swallow a throw on its own.
+    setupFiles: ["src/testing/noNetwork.ts"],
+
     exclude: [
       "**/node_modules/**",
       "**/dist/**",

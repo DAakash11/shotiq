@@ -10,6 +10,11 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
+    // The integration suite talks to a real Redis, which is the point --
+    // but it must still never reach the real ShotIQ API or stats.nba.com.
+    // Redis is not HTTP, so the fetch guard does not interfere with it.
+    setupFiles: ["src/testing/noNetwork.ts"],
+
     include: ["src/**/*.integration.test.ts"],
 
     // One file at a time. These share a single Redis database, so running

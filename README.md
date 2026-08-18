@@ -18,7 +18,7 @@ Opens on **Shai Gilgeous-Alexander, 2025-26**. Any player back to 1996-97 can be
 | **Async / queues** | BullMQ on Redis: idempotent job submission, deduplication verified under concurrent load, state that survives a process restart. |
 | **LLM integration** | Structured JSON output from Gemini, constrained to a server-computed digest so every figure traces back to the data. |
 | **Docker** | Multi-stage frontend build, a private API reachable only over the compose network, health-gated startup. |
-| **Testing** | 112 frontend tests, 77 in the TypeScript service, plus a Python suite — all enforced to run offline. |
+| **Testing** | 316 tests — 112 frontend, 121 Python, 83 in the TypeScript service — all enforced to run offline. |
 
 Reasoning behind each decision is in the commit messages; they are written to explain *why*, not what changed.
 
@@ -124,15 +124,15 @@ Responses are cached to `server/cache/` by player and season; add `?refresh=true
 npm test                      # frontend — 112 tests
 
 cd worker
-npm test                      # unit — 61 tests, no Redis needed
+npm test                      # unit — 67 tests, no Redis needed
 npm run test:integration      # 16 tests against a real Redis
 
 cd server
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m pytest
+.venv\Scripts\python.exe -m pytest   # 121 tests
 ```
 
-**Everything runs offline, and that is enforced rather than trusted.** The NBA fetchers raise under a fixture, constructing a real LLM client raises, and the live-generation flag is pinned off regardless of what sits in a developer's `.env`. The worker's integration tests are the one exception and are kept separate: they need a real Redis and **fail** if one is absent, rather than skipping — a suite that goes green where nothing was verified is worse than one that will not run.
+**Everything runs offline, and that is enforced rather than trusted.** The NBA fetchers raise under a fixture, constructing a real LLM client raises, and the live-generation flag is pinned off regardless of what sits in a developer's `.env`. The TypeScript service replaces `fetch` with a guard that both rejects and *records* the attempt — recording matters, because its HTTP client catches every network failure and wraps it, so a throw alone would be swallowed and a test could pass having gone out to the internet. The worker's integration tests are the one exception and are kept separate: they need a real Redis and **fail** if one is absent, rather than skipping — a suite that goes green where nothing was verified is worse than one that will not run.
 
 ## Acknowledgements
 
