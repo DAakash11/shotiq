@@ -314,3 +314,25 @@ export function hasTrackingData(
 ): payload is SplitsPayload & { readonly overall: SplitRow } {
   return payload.overall !== null;
 }
+
+// ---------------------------------------------------------------------------
+// Job lifecycle
+// ---------------------------------------------------------------------------
+
+/**
+ * The states a job moves through. Named to match BullMQ's own vocabulary so
+ * that step 4 can hand these values straight through instead of translating
+ * between two sets of words that mean the same thing.
+ */
+export type JobState = "queued" | "active" | "completed" | "failed";
+
+/** What GET /jobs/:id reports back. */
+export interface JobRecord {
+  readonly jobId: string;
+  readonly state: JobState;
+  readonly data: WarmJobData;
+  /** ISO-8601, when the job was first accepted. */
+  readonly acceptedAt: string;
+  /** Present only once the job has finished, either way. */
+  readonly result: WarmResult | null;
+}
