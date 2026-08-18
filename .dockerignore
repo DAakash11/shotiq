@@ -47,8 +47,18 @@ dist
 # also why requirements-dev.txt stays out.
 **/*.test.js
 **/*.test.jsx
+**/*.test.ts
 server/tests
 server/requirements-dev.txt
+
+# The worker's test-only helpers and runner configs. tsconfig.build.json
+# already excludes them from the compiled output, so this is belt and
+# braces -- but it also keeps them out of the build CONTEXT, which is what
+# stops an edit to a test invalidating the image's cached layers and
+# rebuilding for no reason.
+worker/src/testing
+worker/vitest.config.ts
+worker/vitest.integration.config.ts
 
 # Development-only tooling and history.
 .git

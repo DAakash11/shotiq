@@ -34,6 +34,8 @@ docker compose up --build
 
 Open **http://localhost:8080**.
 
+That brings up five services: nginx serving the dashboard, the FastAPI backend, Redis, the job API and the worker that drains the queue. The job API's interactive docs are at **http://localhost:3001/docs**. Together they idle at about 150 MB.
+
 Five seasons ship complete — shot data, tracking splits and the generated note — so a fresh clone works with **no API key and no network**:
 
 | Player | Season | |
@@ -97,7 +99,9 @@ server/         FastAPI service + cached NBA data
 worker/         TypeScript job service that pre-warms the cache
 ```
 
-`web` (nginx, port 8080) is the only published service. `api` is reachable solely over the compose network, so the browser calls `/api/...` with no host in the path and nothing in the bundle knows where the API lives.
+`web` (nginx, port 8080) and the job API (3001) are the only published services. `api` and `redis` are reachable solely over the compose network — the browser calls `/api/...` with no host in the path, so nothing in the bundle knows where the API lives, and an unauthenticated Redis is never exposed to the host.
+
+The job API and the worker are the **same image with different commands**. Two images would have to be kept in step and could drift into running different code against one queue, which is the one thing that must not happen: producer and consumer agree about the job payload only as long as they are the same build.
 
 ### The warm worker
 

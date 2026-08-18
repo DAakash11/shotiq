@@ -10,5 +10,11 @@
   "compilerOptions": {
     "noEmit": false
   },
-  "exclude": ["src/**/*.test.ts"]
+  // src/testing/ is excluded as well as the tests themselves, and not for
+  // tidiness: noNetwork.ts imports vitest. Compiled into dist it would leave
+  // the production image carrying a module that requires a devDependency the
+  // runtime stage does not install. Nothing imports it at runtime, so it
+  // would never actually throw -- which is exactly the sort of thing that
+  // sits in an image unnoticed until someone wires it up by accident.
+  "exclude": ["src/**/*.test.ts", "src/testing/**"]
 }

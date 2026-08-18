@@ -44,6 +44,97 @@ services:
 
     restart: unless-stopped
 
+  # The queue's storage. Alpine, and tiny: the image is ~15 MB and it idles
+  # under 10 MB of RAM, which matters on a host that gives Docker 2.78 GB.
+  redis:
+    image: redis:alpine
+
+    # Not published. Nothing outside this network has any business talking
+    # to it, and an exposed Redis with no password is one of the most
+    # reliably exploited misconfigurations there is.
+    expose:
+      - "6379"
+
+    # Persistence, so a `docker compose down` does not silently drop queued
+    # jobs. The whole argument for a real queue over an in-memory one is
+    # that work survives a restart; a Redis with no volume would give that
+    # back at the container level after establishing it at the process
+    # level.
+    volumes:
+      - shotiq-redis:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+    # Depended on by both worker services, so it has to report readiness
+    # rather than merely existing -- BullMQ connecting before Redis accepts
+    # commands is a startup crash loop.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+    restart: unless-stopped
+
+  # The job API. Same image as `worker` below, different command.
+  worker-api:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+
+    # Published, unlike `api`, and for one reason: /docs. It is how the
+    # queue is driven by hand and the clearest demonstration that the
+    # service exists. Nothing in the dashboard calls it.
+    ports:
+      - "3001:3001"
+
+    environment:
+      # Service names, not 127.0.0.1. Inside a container, loopback is the
+      # container's own -- the IPv6-versus-IPv4 problem that forces
+      # 127.0.0.1 on the host does not arise here, because Compose's DNS
+      # resolves these correctly either way.
+      REDIS_URL: redis://redis:6379
+      SHOTIQ_API_URL: http://api:8000
+      WORKER_PORT: "3001"
+
+    depends_on:
+      redis:
+        condition: service_healthy
+      # Waits for the Python API to be HEALTHY, not merely started. The
+      # worker calls it, and a job that runs before uvicorn has finished
+      # importing pandas fails for a reason that has nothing to do with the
+      # job.
+      api:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+  # The consumer. Identical image, no HTTP surface.
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: ["node", "dist/worker/index.js"]
+
+    environment:
+      REDIS_URL: redis://redis:6379
+      SHOTIQ_API_URL: http://api:8000
+
+    # The image's healthcheck probes :3001, which this process does not
+    # serve. Left as-is it would report unhealthy forever and invite a
+    # restart loop, so it is disabled rather than replaced -- a consumer's
+    # health is "is it draining the queue", which a container-level check
+    # cannot see.
+    healthcheck:
+      disable: true
+
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -66,3 +157,4 @@ services:
 
 volumes:
   shotiq-cache:
+  shotiq-redis:
