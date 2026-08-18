@@ -39,6 +39,36 @@ export function createWarmQueue(connection: Redis): WarmQueue {
     connection,
 
     defaultJobOptions: {
+      // Three attempts total, not three retries. BullMQ counts the first
+      // run, so this is one try and two more.
+      //
+      // Three is chosen against the actual failure being defended against:
+      // Gemini returning 503 and stats.nba.com rate-limiting, both of which
+      // are transient and usually clear within seconds. More attempts would
+      // not fix a genuinely broken upstream, and each one costs a 90-second
+      // timeout — ten attempts against a dead service is fifteen minutes of
+      // a worker slot spent to reach the same conclusion.
+      attempts: 3,
+
+      backoff: {
+        // Exponential, not fixed. A fixed delay means every client that
+        // failed together retries together, forever — the same synchronised
+        // wave hitting an upstream that is already struggling. Doubling
+        // spreads the load out as failures persist.
+        //
+        // 2s, then 4s. Long enough for a 503 to clear, short enough that a
+        // recoverable job is not sitting idle for minutes.
+        type: "exponential",
+        delay: 2000,
+
+        // Jitter is the part people leave out, and it is what actually
+        // breaks the synchronisation. Exponential backoff alone still has
+        // every failed job waiting the SAME 2s and retrying in lockstep --
+        // a thundering herd, just a politer one. Randomising the delay by
+        // ±30% scatters them.
+        jitter: 0.3,
+      },
+
       // Completed jobs are KEPT, which is a deliberate choice with a
       // consequence attached.
       //

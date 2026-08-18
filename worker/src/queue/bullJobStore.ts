@@ -1,7 +1,8 @@
 import type { Job } from "bullmq";
 import type { Redis } from "ioredis";
 
-import type { JobStore, SubmitOutcome } from "../api/jobStore.js";
+import type { JobStore, SubmitOptions, SubmitOutcome } from "../api/jobStore.js";
+import type { WarmCache } from "../cache/warmCache.js";
 import type {
   JobRecord,
   JobState,
@@ -98,10 +99,34 @@ const CLAIM_TTL_SECONDS = 3600;
 export function createBullJobStore(
   queue: WarmQueue,
   connection: Redis,
+  cache?: WarmCache,
 ): JobStore {
   return {
-    async submit(data: WarmJobData): Promise<SubmitOutcome> {
+    async submit(data: WarmJobData, options?: SubmitOptions): Promise<SubmitOutcome> {
       const jobId = warmJobId(data.playerId, data.season);
+
+      /**
+       * The escape hatch for the retention window.
+       *
+       * Because identity comes from the job id, a completed job BLOCKS
+       * re-adding the same subject until it is evicted -- and BullMQ's
+       * eviction is best-effort, so on a quiet queue that can be longer than
+       * the stated hour. Without this, "warm it again, the season has moved
+       * on" is unanswerable.
+       *
+       * All three pieces of state have to go, and each for its own reason:
+       * the JOB, or add() returns the old one; the CLAIM marker, or the
+       * caller is told duplicate; and the CACHED PAYLOAD, or the processor
+       * finds it warm and skips. Removing only the job -- the obvious
+       * implementation -- produces a fresh job that instantly reports
+       * "skipped", which looks like the refresh silently did nothing.
+       */
+      if (options?.refresh === true) {
+        const stale = await queue.getJob(jobId);
+        await stale?.remove();
+        await connection.del(`claim:${jobId}`);
+        await cache?.invalidate(data.playerId, data.season);
+      }
 
       // Passing a jobId that already exists makes BullMQ return the EXISTING
       // job rather than creating a second one or throwing, and it decides

@@ -315,6 +315,51 @@ export function hasTrackingData(
   return payload.overall !== null;
 }
 
+/**
+ * EXHAUSTIVENESS CHECKING, and the reason `never` exists.
+ *
+ * `never` is the type with no possible values. Nothing can be assigned to
+ * it. That sounds useless and is the whole trick: put a parameter of type
+ * `never` at the end of a switch over a union, and the code only compiles if
+ * every member has already been handled — because only then is the remaining
+ * type genuinely empty.
+ *
+ * Add a fourth member to WarmResult and this stops compiling, in every
+ * switch that forgot it, with the error naming exactly which type it could
+ * not narrow away. That is a compiler-generated to-do list, and it is one of
+ * the few things a type system does that no test can: a test can only check
+ * cases someone thought to write.
+ *
+ * The `throw` is unreachable by construction. It exists for the runtime the
+ * types are not present in — a JSON payload from an older version, say — and
+ * because a function must still do something if control ever reaches there.
+ */
+export function assertNever(value: never): never {
+  throw new Error(`unhandled case: ${JSON.stringify(value)}`);
+}
+
+/**
+ * A human-readable line for a result, used in worker logs.
+ *
+ * Exists mainly to give the exhaustiveness check somewhere real to live: a
+ * new WarmResult member breaks this function, so nobody can add one without
+ * deciding how it should read in the logs.
+ */
+export function describeWarmResult(result: WarmResult): string {
+  switch (result.status) {
+    case "warmed":
+      return `warmed ${result.shotCount} shots in ${result.durationMs}ms (${result.shotsSource}/${result.splitsSource})`;
+    case "skipped":
+      return `skipped: ${result.reason}`;
+    case "failed":
+      return `failed on attempt ${result.attempt}: ${result.error}`;
+    default:
+      // If a member is ever added, `result` is not `never` here and this
+      // line is a compile error rather than a branch nobody wrote.
+      return assertNever(result);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Job lifecycle
 // ---------------------------------------------------------------------------

@@ -18,7 +18,7 @@ Opens on **Shai Gilgeous-Alexander, 2025-26**. Any player back to 1996-97 can be
 | **Async / queues** | BullMQ on Redis: idempotent job submission, deduplication verified under concurrent load, state that survives a process restart. |
 | **LLM integration** | Structured JSON output from Gemini, constrained to a server-computed digest so every figure traces back to the data. |
 | **Docker** | Multi-stage frontend build, a private API reachable only over the compose network, health-gated startup. |
-| **Testing** | 112 frontend tests, 42 in the TypeScript service, plus a Python suite — all enforced to run offline. |
+| **Testing** | 112 frontend tests, 77 in the TypeScript service, plus a Python suite — all enforced to run offline. |
 
 Reasoning behind each decision is in the commit messages; they are written to explain *why*, not what changed.
 
@@ -124,8 +124,8 @@ Responses are cached to `server/cache/` by player and season; add `?refresh=true
 npm test                      # frontend — 112 tests
 
 cd worker
-npm test                      # unit — 36 tests, no Redis needed
-npm run test:integration      # 6 tests against a real Redis
+npm test                      # unit — 61 tests, no Redis needed
+npm run test:integration      # 16 tests against a real Redis
 
 cd server
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -133,20 +133,6 @@ cd server
 ```
 
 **Everything runs offline, and that is enforced rather than trusted.** The NBA fetchers raise under a fixture, constructing a real LLM client raises, and the live-generation flag is pinned off regardless of what sits in a developer's `.env`. The worker's integration tests are the one exception and are kept separate: they need a real Redis and **fail** if one is absent, rather than skipping — a suite that goes green where nothing was verified is worse than one that will not run.
-
-## Decisions worth asking about
-
-Short version; the commit messages carry the full reasoning.
-
-- **League rates are weighted, never averaged.** `sum(made)/sum(attempts)`, because averaging per-row percentages moves *Above the Break 3* from a true .350 to a reported .429.
-- **A rate with zero attempts is `null`, never `0`.** Zero claims he tried and missed.
-- **The aggregation exists twice on purpose** — once for the charts, once for the LLM prompt — because the summary endpoint must not accept client-computed numbers. Both suites pin the same three figures so drift reddens one side and names it.
-- **Charts use green/grey, not red/green**, which are ~7 delta-E apart under common colour blindness versus 26 for blue/orange. Bars always start at zero.
-- **Bar length encodes attempts, not percentage**, so shot selection and accuracy are readable at once.
-- **`team_id=0`** on every query — pinning a real team id silently drops half the shots of anyone traded mid-season.
-- **The AI note is generated headline-last**, because a model filling a schema in order otherwise commits to a thesis before examining the evidence.
-- **The API image is Debian, not Alpine** — pandas and numpy cannot use manylinux wheels against musl.
-- **Job identity is derived from the subject, never a UUID**, which is what makes a retried request harmless instead of duplicated work.
 
 ## Acknowledgements
 

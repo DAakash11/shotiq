@@ -9,6 +9,7 @@
 
 import { buildServer } from "./api/server.js";
 import { createBullJobStore } from "./queue/bullJobStore.js";
+import { createWarmCache } from "./cache/warmCache.js";
 import { createRedisConnection } from "./queue/connection.js";
 import { createWarmQueue } from "./queue/warmQueue.js";
 import { loadConfig } from "./config.js";
@@ -38,7 +39,10 @@ const connection = createRedisConnection(config.redisUrl);
 await connection.connect();
 
 const queue = createWarmQueue(connection);
-const store = createBullJobStore(queue, connection);
+// The cache is handed to the store so a refresh can drop the warmed payload
+// as well as the job. Without it a refreshed job runs and immediately reports
+// "skipped", which looks like the refresh did nothing.
+const store = createBullJobStore(queue, connection, createWarmCache(connection));
 
 const server = buildServer({ config, store });
 

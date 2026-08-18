@@ -19,7 +19,10 @@ import { createWarmCache } from "../cache/warmCache.js";
 import { createWarmProcessor } from "./processor.js";
 import { loadConfig } from "../config.js";
 import { WARM_QUEUE_NAME } from "../queue/warmQueue.js";
+import { createDeadLetterQueue } from "../queue/deadLetterQueue.js";
+import { deadLetterIfFinished } from "./failureHandler.js";
 import type { WarmJobData, WarmResult } from "../types/models.js";
+import { describeWarmResult } from "../types/models.js";
 
 const config = loadConfig();
 const log = pino({ level: config.logLevel });
@@ -36,6 +39,11 @@ const log = pino({ level: config.logLevel });
  */
 const connection = createRedisConnection(config.redisUrl);
 await connection.connect();
+
+// The dead-letter queue shares the worker's connection: it is written to
+// only on failure, so it never competes with the blocking wait for jobs in
+// any meaningful way.
+const deadLetters = createDeadLetterQueue(connection);
 
 const processor = createWarmProcessor({
   client: createShotiqClient(config.shotiqApiUrl, config.upstreamTimeoutMs),
@@ -63,7 +71,10 @@ const worker = new Worker<WarmJobData, WarmResult>(
  * it, so an unobserved failure is genuinely silent.
  */
 worker.on("completed", (job: Job<WarmJobData, WarmResult>, result: WarmResult) => {
-  log.info({ jobId: job.id, result }, "job completed");
+  // describeWarmResult is the switch carrying the `never` exhaustiveness
+  // check, so a new WarmResult member cannot be added without deciding how
+  // it reads here.
+  log.info({ jobId: job.id }, describeWarmResult(result));
 });
 
 worker.on("failed", (job: Job<WarmJobData, WarmResult> | undefined, error: Error) => {
@@ -72,10 +83,36 @@ worker.on("failed", (job: Job<WarmJobData, WarmResult> | undefined, error: Error
   // nothing to name. strictNullChecks forces this to be handled rather than
   // producing "cannot read properties of undefined" inside the error
   // handler -- the worst possible place for a second error.
-  log.error(
-    { jobId: job?.id, attempt: job?.attemptsMade, err: error },
-    "job failed",
-  );
+  if (job === undefined) {
+    log.error({ err: error }, "a job failed before it could be loaded");
+    return;
+  }
+
+  // The decision itself lives in failureHandler.ts so it can be tested
+  // without starting this process. Here we only act on it.
+  //
+  // Fire-and-forget with an explicit catch, NOT an unawaited promise. This
+  // handler cannot be async -- BullMQ does not await event listeners, so
+  // returning a promise means nothing waits for it and a rejection becomes
+  // an unhandled rejection that can take the process down. Catching keeps a
+  // failed dead-letter write from turning one lost job into a dead worker.
+  void deadLetterIfFinished(deadLetters, job, error)
+    .then((disposition) => {
+      if (disposition.kind === "will-retry") {
+        log.warn(
+          { jobId: job.id, attempt: disposition.attempt, of: disposition.of, err: error },
+          "job failed, will retry",
+        );
+        return;
+      }
+      log.error(
+        { jobId: job.id, attempt: disposition.attempt, kind: disposition.kind, err: error },
+        "job finished failed, dead-lettered",
+      );
+    })
+    .catch((dlqError: unknown) => {
+      log.error({ err: dlqError }, "failed to write to the dead-letter queue");
+    });
 });
 
 // Fires when the worker's Redis connection breaks. Logged rather than

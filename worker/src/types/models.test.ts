@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasTrackingData } from "./models.js";
+import { describeWarmResult, hasTrackingData } from "./models.js";
 import type {
   ShotRecord,
   SplitRow,
@@ -167,6 +167,68 @@ describe("hasTrackingData", () => {
       "shotClock",
       "touchTime",
     ]);
+  });
+});
+
+describe("describeWarmResult and the never check", () => {
+  it("describes every member of the union", () => {
+    /**
+     * The test is the smaller half of this guarantee, and worth being clear
+     * about which half does what.
+     *
+     * This asserts the three current members read correctly. What it CANNOT
+     * do is notice a fourth being added -- a test only covers cases somebody
+     * thought to write. The `default: assertNever(result)` branch in
+     * describeWarmResult is what covers that: add a member and the file
+     * stops compiling, naming the type it could not narrow away.
+     *
+     * A compiler-generated to-do list, in other words, which is something no
+     * test can produce.
+     */
+    expect(
+      describeWarmResult({
+        status: "warmed",
+        playerId: 201939,
+        season: "2016-17",
+        shotsSource: "cache",
+        splitsSource: "live",
+        shotCount: 1443,
+        hasTracking: true,
+        durationMs: 319,
+      }),
+    ).toBe("warmed 1443 shots in 319ms (cache/live)");
+
+    expect(
+      describeWarmResult({
+        status: "skipped",
+        playerId: 201939,
+        season: "2016-17",
+        reason: "already warm",
+      }),
+    ).toBe("skipped: already warm");
+
+    expect(
+      describeWarmResult({
+        status: "failed",
+        playerId: 201939,
+        season: "2016-17",
+        error: "upstream 503",
+        attempt: 3,
+      }),
+    ).toBe("failed on attempt 3: upstream 503");
+  });
+
+  it("throws if an unknown member reaches it at runtime", () => {
+    // The `throw` inside assertNever is unreachable by construction, but the
+    // runtime is where types do not exist -- a result deserialised from an
+    // older version could arrive with a status nothing handles. Better a
+    // named error than falling off the end of the function returning
+    // undefined.
+    const impossible = { status: "exploded" } as unknown as Parameters<
+      typeof describeWarmResult
+    >[0];
+
+    expect(() => describeWarmResult(impossible)).toThrow(/unhandled case/);
   });
 });
 

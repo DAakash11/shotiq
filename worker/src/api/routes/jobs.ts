@@ -47,7 +47,11 @@ export async function jobRoutes(
    * is why the schema is the thing standing between the outside world and
    * this handler, and why a test below pins them together.
    */
-  fastify.post<{ Body: WarmJobData }>(
+  // The body carries `refresh`, which is NOT part of WarmJobData -- it says
+  // how to handle this submission rather than what the job is. Keeping it out
+  // of the job data matters: it does not feed the job id, so a refresh
+  // request and an ordinary one still identify the same subject.
+  fastify.post<{ Body: WarmJobData & { refresh?: boolean } }>(
     "/jobs",
     {
       schema: {
@@ -77,7 +81,8 @@ export async function jobRoutes(
       // `kind` property. Forgetting an await is the single commonest async
       // mistake, and it is only sometimes this visible: on a value you merely
       // pass along, the promise flows onward and surfaces far from its cause.
-      const outcome = await store.submit(request.body);
+      const { refresh, ...data } = request.body;
+      const outcome = await store.submit(data, { refresh: refresh ?? false });
 
       // 202 Accepted, not 200 OK, and the distinction is the entire point of
       // an async service: the work has been accepted for later processing

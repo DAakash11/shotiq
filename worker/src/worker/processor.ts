@@ -3,6 +3,7 @@ import type { Job } from "bullmq";
 import type { WarmCache } from "../cache/warmCache.js";
 import type { ShotiqClient } from "../fetchers/shotiqClient.js";
 import type { WarmJobData, WarmResult } from "../types/models.js";
+import { toQueueError } from "./retry.js";
 
 export interface ProcessorDeps {
   readonly client: ShotiqClient;
@@ -92,10 +93,24 @@ export function createWarmProcessor(deps: ProcessorDeps) {
     // keeps running in the background; that is harmless here because the
     // failure will be retried, but it is worth knowing rather than assuming
     // the loser is cancelled.
-    const [shots, splits] = await Promise.all([
-      client.getShots(playerId, season),
-      client.getSplits(playerId, season),
-    ]);
+    // The one try/catch in the file, and it does not break the "never
+    // catch" rule -- it translates and immediately rethrows.
+    //
+    // Catching to SWALLOW is the mistake, because BullMQ then records a
+    // success. Catching to convert a permanent failure into
+    // UnrecoverableError, then throwing that, is how a processor says "do
+    // not spend two more attempts on this" -- and there is no other way to
+    // say it. The job still fails; it just fails now instead of in six
+    // seconds.
+    let shots, splits;
+    try {
+      [shots, splits] = await Promise.all([
+        client.getShots(playerId, season),
+        client.getSplits(playerId, season),
+      ]);
+    } catch (error) {
+      throw toQueueError(error);
+    }
 
     await cache.write(playerId, season, {
       shots,

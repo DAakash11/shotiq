@@ -84,6 +84,12 @@ function fakeCache(initial: WarmedEntry | null = null): WarmCache & {
     async write(_playerId, _season, entry) {
       written.push(entry);
     },
+    async invalidate() {
+      // Unused by the processor, but required by the interface -- and the
+      // compiler said so the moment invalidate was added to WarmCache. That
+      // is the argument for typed fakes over vi.mock of a module path: a
+      // path-based mock would have silently stopped matching the real thing.
+    },
   };
 }
 

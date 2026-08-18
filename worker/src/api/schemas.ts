@@ -65,6 +65,10 @@ export const warmJobBodySchema = {
     playerId: { type: "integer", minimum: 1 },
     season: { type: "string", pattern: SEASON_REGEX_SOURCE },
     includeSummary: { type: "boolean" },
+    // Forces the work to happen again: drops the existing job, the claim
+    // marker and the cached payloads. Without it a completed subject cannot
+    // be re-warmed until its retention window expires.
+    refresh: { type: "boolean" },
   },
 } as const;
 

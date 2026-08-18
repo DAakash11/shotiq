@@ -20,6 +20,8 @@ export interface WarmedEntry {
 export interface WarmCache {
   read(playerId: PlayerId, season: SeasonId): Promise<WarmedEntry | null>;
   write(playerId: PlayerId, season: SeasonId, entry: WarmedEntry): Promise<void>;
+  /** Drops the entry, so the next job does the work instead of skipping. */
+  invalidate(playerId: PlayerId, season: SeasonId): Promise<void>;
 }
 
 /**
@@ -72,6 +74,13 @@ export function createWarmCache(connection: Redis): WarmCache {
         "EX",
         CACHE_TTL_SECONDS,
       );
+    },
+
+    async invalidate(playerId, season) {
+      // del on a key that does not exist returns 0 and is not an error, so
+      // there is nothing to check. Invalidating something already gone is
+      // exactly as successful as invalidating something present.
+      await connection.del(cacheKey(playerId, season));
     },
   };
 }

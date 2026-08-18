@@ -54,8 +54,20 @@ export type SubmitOutcome =
  * ("either a promise, or nothing at all, right now"). Reading that
  * distinction correctly is most of learning to type async code.
  */
+export interface SubmitOptions {
+  /**
+   * Force the work to happen again.
+   *
+   * Deliberately NOT part of WarmJobData. It describes how this submission
+   * should be handled, not what the job is -- and if it were job data it
+   * would change the payload without changing the job id, so a refresh
+   * request and a normal one would deduplicate into each other.
+   */
+  readonly refresh?: boolean;
+}
+
 export interface JobStore {
-  submit(data: WarmJobData): Promise<SubmitOutcome>;
+  submit(data: WarmJobData, options?: SubmitOptions): Promise<SubmitOutcome>;
   get(jobId: string): Promise<JobRecord | undefined>;
   size(): Promise<number>;
   /** Releases whatever the implementation holds. A no-op for the Map. */
@@ -78,8 +90,12 @@ export function createInMemoryJobStore(): JobStore {
     // return type Promise<SubmitOutcome> automatically, so this satisfies
     // the interface without every return statement being wrapped in
     // Promise.resolve by hand.
-    async submit(data: WarmJobData): Promise<SubmitOutcome> {
+    async submit(data: WarmJobData, options?: SubmitOptions): Promise<SubmitOutcome> {
       const jobId = warmJobId(data.playerId, data.season);
+
+      if (options?.refresh === true) {
+        jobs.delete(jobId);
+      }
 
       const existing = jobs.get(jobId);
       if (existing !== undefined) {

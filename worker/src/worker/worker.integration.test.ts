@@ -122,9 +122,18 @@ function onceSettled(
       clearTimeout(timer);
       resolve({ ok: true, result });
     });
-    w.once("failed", (_job, error) => {
-      clearTimeout(timer);
-      resolve({ ok: false, error });
+    // Only a TERMINAL failure resolves this. Once step 6 gave the queue
+    // attempts: 3, the same event fires for every intermediate failure too,
+    // and resolving on the first one asserted against a job that was
+    // actually sitting in delayed waiting to retry -- which is how this test
+    // started reporting "queued" where it expected "failed".
+    w.on("failed", (job, error) => {
+      if (job === undefined) return;
+      const allowed = job.opts.attempts ?? 1;
+      if (error.name === "UnrecoverableError" || job.attemptsMade >= allowed) {
+        clearTimeout(timer);
+        resolve({ ok: false, error });
+      }
     });
   });
 }
@@ -233,7 +242,9 @@ describe("failure is recorded rather than swallowed", () => {
     expect(record?.result).toMatchObject({
       status: "failed",
       error: expect.stringContaining("503") as unknown as string,
-      attempt: 1,
+      // Three, not one: a 503 is retryable, so the job used its whole budget
+      // before giving up. That is the retry policy working.
+      attempt: 3,
     });
   });
 });
