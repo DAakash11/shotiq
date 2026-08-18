@@ -15,11 +15,17 @@
  * the single most common way a queue ends up doing double work.
  */
 
-/** An NBA player id as stats.nba.com issues them, e.g. 201939 (Curry). */
-export type PlayerId = number;
-
-/** A season in the NBA's own notation: "2016-17". */
-export type SeasonId = string;
+// Step 1 declared PlayerId and SeasonId here. They moved to types/models.ts
+// the moment a second file needed them: two independent declarations of the
+// same idea drift, and because both would be aliases of the same underlying
+// primitive, TypeScript would never notice they had.
+//
+// `import type` rather than a plain import. It states that this brings in
+// types only, so the emitted JavaScript contains no import of models.js at
+// all -- the line vanishes entirely. Worth knowing because a plain import
+// used only for types can drag a whole module into the runtime bundle, and
+// in a module with side effects that changes what actually executes.
+import type { PlayerId, SeasonId } from "../types/models.js";
 
 /**
  * Namespaces our keys inside Redis, which is a shared key space. Without a
