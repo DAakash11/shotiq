@@ -79,3 +79,84 @@ export const jobIdParamsSchema = {
 
 /** Exported so a test can assert it matches the guard in queue/jobId.ts. */
 export const seasonRegexSource = SEASON_REGEX_SOURCE;
+
+// ---------------------------------------------------------------------------
+// Response schemas
+// ---------------------------------------------------------------------------
+
+/**
+ * These do two jobs at once, and the second one has teeth.
+ *
+ * The obvious job is documentation: @fastify/swagger reads them to generate
+ * the OpenAPI spec behind /docs, so the browser page shows the real response
+ * shapes instead of an empty example.
+ *
+ * The job that bites is SERIALISATION. Once a route has a response schema,
+ * Fastify stops using JSON.stringify and compiles a serialiser from it via
+ * fast-json-stringify -- which emits only the properties the schema names
+ * and silently drops the rest. Adding a field to a handler and forgetting it
+ * here means the field vanishes from the response with no error anywhere,
+ * and the handler's own types are no help because the deletion happens after
+ * they are gone. It is the mirror image of removeAdditional on the request
+ * side: same silence, opposite direction.
+ *
+ * That is a fair trade for the speed and the documentation, but only if the
+ * responses are covered by tests. Ours assert on `deduplicated` and on
+ * `result: null` specifically because both would disappear unnoticed if this
+ * file fell behind.
+ */
+
+const warmJobDataSchema = {
+  type: "object",
+  properties: {
+    playerId: { type: "integer" },
+    season: { type: "string" },
+    includeSummary: { type: "boolean" },
+  },
+} as const;
+
+const jobRecordProperties = {
+  jobId: { type: "string", examples: ["warm:201939:2016-17"] },
+  state: {
+    type: "string",
+    enum: ["queued", "active", "completed", "failed"],
+  },
+  data: warmJobDataSchema,
+  acceptedAt: { type: "string", format: "date-time" },
+  // The outcome, once there is one. Left open rather than spelling out the
+  // three WarmResult members, because step 6 is where that union settles and
+  // a schema pinned to a half-built shape would quietly truncate the parts
+  // it did not yet know about.
+  result: { type: "object", nullable: true, additionalProperties: true },
+} as const;
+
+export const jobRecordResponseSchema = {
+  type: "object",
+  properties: jobRecordProperties,
+} as const;
+
+/** What POST /jobs returns: a job record plus whether it was a repeat. */
+export const submitJobResponseSchema = {
+  type: "object",
+  properties: {
+    ...jobRecordProperties,
+    deduplicated: { type: "boolean" },
+  },
+} as const;
+
+export const errorResponseSchema = {
+  type: "object",
+  properties: {
+    error: { type: "string" },
+    message: { type: "string" },
+  },
+} as const;
+
+export const healthResponseSchema = {
+  type: "object",
+  properties: {
+    status: { type: "string" },
+    service: { type: "string" },
+    upstream: { type: "string" },
+  },
+} as const;

@@ -2,7 +2,13 @@ import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 
 import type { JobStore } from "../jobStore.js";
 import type { WarmJobData } from "../../types/models.js";
-import { jobIdParamsSchema, warmJobBodySchema } from "../schemas.js";
+import {
+  errorResponseSchema,
+  jobIdParamsSchema,
+  jobRecordResponseSchema,
+  submitJobResponseSchema,
+  warmJobBodySchema,
+} from "../schemas.js";
 
 export interface JobRoutesOptions extends FastifyPluginOptions {
   readonly store: JobStore;
@@ -43,7 +49,26 @@ export async function jobRoutes(
    */
   fastify.post<{ Body: WarmJobData }>(
     "/jobs",
-    { schema: { body: warmJobBodySchema } },
+    {
+      schema: {
+        // `tags` and `summary` are ignored by the validator and read by
+        // @fastify/swagger, which is how /docs gets its grouping and titles
+        // without a separate document to keep in step.
+        tags: ["Jobs"],
+        summary: "Request that a player-season be warmed",
+        description:
+          "Returns 202 when the job is newly queued and 200 when an " +
+          "identical job already exists. A repeat is a success, not a " +
+          "conflict: the job id is derived from the player and season, so " +
+          "asking twice is harmless by construction.",
+        body: warmJobBodySchema,
+        response: {
+          202: submitJobResponseSchema,
+          200: submitJobResponseSchema,
+          400: errorResponseSchema,
+        },
+      },
+    },
     async (request, reply) => {
       const outcome = store.submit(request.body);
 
@@ -66,7 +91,17 @@ export async function jobRoutes(
 
   fastify.get<{ Params: { id: string } }>(
     "/jobs/:id",
-    { schema: { params: jobIdParamsSchema } },
+    {
+      schema: {
+        tags: ["Jobs"],
+        summary: "Look up a submitted job",
+        params: jobIdParamsSchema,
+        response: {
+          200: jobRecordResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
     async (request, reply) => {
       const job = store.get(request.params.id);
 

@@ -212,6 +212,80 @@ describe("GET /api/jobs/:id", () => {
   });
 });
 
+describe("the response schemas do not silently drop fields", () => {
+  /**
+   * Guarding the trap that response schemas introduce. Once a route has one,
+   * Fastify serialises through fast-json-stringify, which emits ONLY the
+   * properties the schema names and drops the rest without a word. A field
+   * added to a handler and forgotten in schemas.ts disappears from the
+   * response, and neither the compiler nor a toMatchObject assertion notices
+   * -- the first because types are long gone by then, the second because it
+   * checks for presence and never for absence.
+   *
+   * Asserting the exact key set is what catches it.
+   */
+  it("returns every field of a submitted job", async () => {
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/jobs",
+      payload: { playerId: 201939, season: "2016-17" },
+    });
+
+    expect(Object.keys(response.json()).sort()).toEqual([
+      "acceptedAt",
+      "data",
+      "deduplicated",
+      "jobId",
+      "result",
+      "state",
+    ]);
+  });
+
+  it("keeps result: null rather than omitting the key", async () => {
+    // A dropped null reads as "no such field" to a client, which is a
+    // different claim from "no result yet".
+    await server.inject({
+      method: "POST",
+      url: "/api/jobs",
+      payload: { playerId: 201939, season: "2016-17" },
+    });
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/jobs/warm:201939:2016-17",
+    });
+
+    expect(Object.keys(response.json())).toContain("result");
+    expect(response.json().result).toBeNull();
+  });
+});
+
+describe("the OpenAPI document", () => {
+  it("describes every route, so /docs cannot drift from the server", async () => {
+    // `await server.ready()` is required and the reason is worth keeping.
+    //
+    // fastify.register() defers: the plugin is queued, not run, so
+    // server.swagger() does not exist until boot completes. TypeScript is
+    // perfectly happy with the call either way, because @fastify/swagger
+    // augments FastifyInstance with the method and types describe SHAPE, not
+    // TIMING -- there is no way to say "this property appears at boot". The
+    // first version of this test type-checked cleanly and threw
+    // "server.swagger is not a function" at runtime.
+    //
+    // The other tests never hit it because inject() awaits ready() itself.
+    await server.ready();
+
+    // Generated from the same schemas the validator uses, so this is really
+    // asserting that they are wired up rather than that a document exists.
+    const spec = server.swagger();
+
+    expect(Object.keys(spec.paths ?? {}).sort()).toEqual([
+      "/api/jobs",
+      "/api/jobs/{id}",
+      "/health",
+    ]);
+  });
+});
+
 describe("the schema and the type guard agree", () => {
   /**
    * The season rule is written twice -- once as a regex for the guard in
