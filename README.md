@@ -89,6 +89,7 @@ src/
   services/     the only place that calls fetch
   utils/        pure data logic — sorting, chart aggregation
 server/         FastAPI service + cached NBA data
+worker/         TypeScript job service that pre-warms the cache
 ```
 
 Components never call `fetch` directly; they call a service function, or a hook wrapping one, so request handling stays in one place and components are testable without a network. The same split applies to data shaping: everything the charts need is computed by pure functions in `utils/`, so it can be unit-tested without a DOM and the chart components only ever draw.
@@ -105,9 +106,26 @@ The model is given the digest and told to use nothing else: no outside knowledge
 
 `POST /api/summary` is a POST rather than a GET because on a cache miss it spends money and writes a file, and because a GET invites browsers to prefetch it on hover. Cached notes carry a fingerprint of the numbers they describe; if the underlying data changes, the note is flagged stale rather than silently regenerated.
 
+## The warm worker
+
+`worker/` is a standalone TypeScript service that pre-computes and caches player-season data so the dashboard is not the thing waiting on it. It runs beside the existing services and neither the Python nor the React code changes to accommodate it.
+
+**What it queues is the I/O, not the arithmetic**, and that choice is the whole design. The aggregation is microseconds; the expensive parts are the fetch from stats.nba.com, which the API allows itself 90 seconds to complete, and the LLM call, which costs money and returns 503 often enough to need a retry policy. Those are worth doing out of band. The maths is not — and re-implementing it here would add a third copy alongside `aggregate.js` and `analytics.py`, one not pinned to the `.573 / .446 / +12.7` twins and therefore free to drift unnoticed. The worker calls the existing API and caches what comes back.
+
+`POST /api/jobs` answers **202 Accepted**, never 200: the work has been queued and has not been done, and saying otherwise would claim a warm cache that does not exist yet. Asking twice for the same player-season returns **200 with `deduplicated: true`** and the same job id — not a 409, because the caller wanted that subject warm and it is, and a client retrying after a dropped connection should not be punished for it. That works because the job id is derived from the subject itself (`warm:201939:2016-17`, mirroring the `shots-201939-2016-17.json` cache naming), so duplicates collide by construction rather than through a check that can be raced.
+
+The service is TypeScript in `strict` mode, and every payload type was written against a real response rather than inferred from the Python that produces it. That was not ceremony: `angleDeg` is null on 317 of Curry's 1,443 attempts in 2016-17, and a pre-tracking season returns `overall: null` with empty split arrays. Both would have compiled perfectly as non-nullable and then produced `NaN` through a fifth of the data, or thrown on the first old season anyone selected.
+
+**Types are erased before the process starts, so they defend nothing at the edge.** A request posting `{"playerId": "banana"}` satisfies every type in this repository. The JSON Schema on each route is what actually runs, rejecting a bad body before the handler is entered — so by the time typed code executes, the type is true. Fastify's validator defaults had to be tightened for that to hold: `coerceTypes` silently converts the string `"201939"` into a number, and `removeAdditional` turns `additionalProperties: false` into *strip the unknown key and return 200*, which would have let a typo like `includeSumary` through as a success with the summary quietly never running. Both are off explicitly, and a test pins the behaviour rather than the setting.
+
 ## Tests
 
 ```
+npm test
+```
+
+```
+cd worker
 npm test
 ```
 
@@ -129,6 +147,10 @@ cd server
 | `server/tests/test_analytics.py` | The server-side digest, including the figures pinned against the JS twin. |
 | `server/tests/test_summary.py` | Prompt construction, response parsing, the cache gate, vendor failures becoming our own error type. |
 | `server/tests/test_api.py` | Real HTTP requests through FastAPI's `TestClient`. |
+| `worker/src/queue/jobId.test.ts` | That the job id is deterministic and distinguishes both player and season — the property idempotency rests on. |
+| `worker/src/types/models.test.ts` | That the models accept the real payloads, nulls included, and that a `WarmResult` narrows on `status` so no branch can read another's fields. |
+| `worker/src/config.test.ts` | That a bad environment variable kills the process at boot rather than surfacing later — including `"3001abc"`, which `parseInt` would accept as 3001. |
+| `worker/src/api/server.test.ts` | Real requests through Fastify's `inject` — the 202/200 split, deduplication measured by store size, and 400s for a string id, a float id, a malformed season and an unknown property. |
 
 **The suite runs entirely offline, and that is enforced rather than trusted.** Cached responses are committed, so data endpoints resolve from disk; one test asserts `meta.source == "cache"` so the suite fails if it starts reaching the network. Because that guard only covers the paths it exercises — and one test slipped past it — the fetchers themselves now raise under a fixture.
 
