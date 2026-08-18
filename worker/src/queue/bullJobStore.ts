@@ -55,8 +55,28 @@ async function toJobRecord(job: Job<WarmJobData, WarmResult>): Promise<JobRecord
 
     // returnvalue is whatever the processor resolved with, and is undefined
     // until then. Normalised to null so the field is always present and the
-    // JSON shape does not change shape between polls.
-    result: job.returnvalue ?? null,
+    // JSON shape does not change between polls.
+    //
+    // A failed job has no returnvalue at all -- the processor threw, so it
+    // never returned anything. The "failed" member of WarmResult is
+    // therefore assembled HERE, from what BullMQ actually recorded, rather
+    // than being something the processor claims about itself. Otherwise a
+    // caller polling a failed job would get result: null and no idea why.
+    result: state === "failed" ? failureResult(job) : (job.returnvalue ?? null),
+  };
+}
+
+function failureResult(job: Job<WarmJobData, WarmResult>): WarmResult {
+  return {
+    status: "failed",
+    playerId: job.data.playerId,
+    season: job.data.season,
+    // failedReason is BullMQ's record of the thrown error's message.
+    error: job.failedReason ?? "unknown failure",
+    // attemptsMade is what makes a first failure distinguishable from an
+    // exhausted retry budget in the logs, which is the difference between
+    // "flaky upstream" and "this will never work".
+    attempt: job.attemptsMade,
   };
 }
 

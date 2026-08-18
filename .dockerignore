@@ -57,6 +57,7 @@ server/requirements-dev.txt
 .github
 .vscode
 README.md
+handoff-shotiq.md
 .oxlintrc.json
 
 # The cache is deliberately included -- it is what makes the container work

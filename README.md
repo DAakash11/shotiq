@@ -2,28 +2,39 @@
 
 An interactive dashboard for exploring NBA shot data — distance, angle, defender pressure and shot-clock context — with an AI scouting note written only from the numbers on the page.
 
-Opens on **Shai Gilgeous-Alexander, 2025-26**. Any player from 1996-97 onwards can be loaded from the UI.
+Opens on **Shai Gilgeous-Alexander, 2025-26**. Any player back to 1996-97 can be loaded from the UI.
 
-## Features
+**React · Python/FastAPI · TypeScript · Redis · Docker**
 
-- **Player and season selection** — search any player in NBA history, back to 1996-97 when shot coordinates were first recorded league-wide. Seasons before 2013-14 predate player tracking, which the picker labels rather than failing on.
-- **Shot table** — every field-goal attempt with date, opponent, quarter, clock, action type, zone, distance, release angle and result. Built on a data-agnostic `DataTable` driven by a column configuration.
-- **Search and sort** — case-insensitive search across date, opponent, action and zone. Headers cycle ascending → descending → back to game order. Missing values sort last in *both* directions.
-- **Shooting by distance** — made and missed **attempts** stacked per band, so bar length carries shot selection while the colour boundary carries accuracy. A tick marks where that boundary would fall at league average on the same attempts, making the gap an edge counted in shots rather than percentage points.
-- **Tracking charts** — FG% by closest defender and by shot clock, against the player's own season average.
-- **AI scouting note** — a headline, two or three strengths, concerns, and the shot diet framing them. The model is handed a digest computed by the server and told to use nothing else, so every figure traces back to the shot data.
+---
 
-## Run with Docker
+## What this project demonstrates
 
-One command, no Node and no Python on the host:
+| | |
+| --- | --- |
+| **Frontend** | React 19 with hooks, CSS Modules, Recharts. Data fetching isolated in a service layer; chart maths in pure, unit-tested functions. |
+| **Backend** | FastAPI on uvicorn, typed request models, a third-party API wrapped so exactly one module knows it exists. |
+| **TypeScript** | A separate service in `strict` mode — discriminated unions, type guards, generics, and runtime schema validation at the HTTP boundary. |
+| **Async / queues** | BullMQ on Redis: idempotent job submission, deduplication verified under concurrent load, state that survives a process restart. |
+| **LLM integration** | Structured JSON output from Gemini, constrained to a server-computed digest so every figure traces back to the data. |
+| **Docker** | Multi-stage frontend build, a private API reachable only over the compose network, health-gated startup. |
+| **Testing** | 112 frontend tests, 42 in the TypeScript service, plus a Python suite — all enforced to run offline. |
+
+Reasoning behind each decision is in the commit messages; they are written to explain *why*, not what changed.
+
+---
+
+## Quick start
+
+No Node and no Python needed on the host:
 
 ```
 docker compose up --build
 ```
 
-Then open **http://localhost:8080**.
+Open **http://localhost:8080**.
 
-Five seasons ship complete — shot data, tracking splits and the generated note — so a fresh clone gets the whole app, AI panel included, with **no API key and no network**:
+Five seasons ship complete — shot data, tracking splits and the generated note — so a fresh clone works with **no API key and no network**:
 
 | Player | Season | |
 | --- | --- | --- |
@@ -33,23 +44,11 @@ Five seasons ship complete — shot data, tracking splits and the generated note
 | LeBron James | 2015-16 | the Cleveland title season |
 | Luka Dončić | 2023-24 | scoring title |
 
-Any other player still works, but needs a live fetch from `stats.nba.com`, and a summary for one needs an API key.
-
-**`web`** is nginx serving the built React app on 8080. **`api`** is FastAPI on uvicorn, deliberately *not* published — reachable only from `web` over the compose network. The browser calls `/api/...` with no host in the path, exactly as it does behind Vite's proxy in development, so nothing in the bundle knows where the API lives and no build-time variable has to be set per deployment.
-
-Details that are load-bearing rather than decorative:
-
-- **The frontend image is multi-stage.** Building needs Node, npm and ~110 MB of packages; serving needs a web server and a directory of files. The build stage is discarded, so the shipped image is 93 MB of nginx and static assets — no Node, no source, no `node_modules`.
-- **The API image is Debian-based, not Alpine.** `nba_api` depends on pandas and numpy, compiled C extensions. Alpine's musl libc cannot use prebuilt manylinux wheels, so pip would build both from source — a toolchain and many minutes to reach what Debian installs in seconds.
-- **nginx's proxy timeout is raised to 120s.** It defaults to 60s while the API allows itself 90s to reach `stats.nba.com`, so a slow first fetch would be cut off as a 504 while the API waited quite happily.
-- **`web` waits for `api` to report *healthy***, not merely to exist, so no request arrives while uvicorn is still importing pandas.
-- **`.env` never enters an image.** It is excluded from the build context and passed at runtime. Anything copied into a layer stays there permanently — deleting it in a later step hides it from the final filesystem without removing it from the image.
+Any other player works too, but needs a live fetch from `stats.nba.com`.
 
 ## Run locally
 
-Two parts: a React frontend and a Python API. Run both.
-
-**API — first terminal**
+**API** — first terminal:
 
 ```
 cd server
@@ -58,143 +57,99 @@ python -m venv .venv
 .venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
 ```
 
-On macOS or Linux the venv binary is `.venv/bin/python`. Interactive API docs at http://localhost:8000/docs.
+On macOS or Linux the venv binary is `.venv/bin/python`. Interactive docs at http://localhost:8000/docs.
 
-**Frontend — second terminal**
+**Frontend** — second terminal:
 
 ```
 npm install
 npm run dev
 ```
 
-Vite prints a local URL (http://localhost:5173) and proxies `/api` to the Python service.
+Vite serves http://localhost:5173 and proxies `/api` to the Python service.
 
-**Optional — generating new AI summaries.** The five seasons above are committed, so the feature works with no setup. A key is only needed to generate a note for a *different* player or season:
+**Warm worker** — optional, two more terminals. It runs as two processes from one codebase: an API that accepts jobs, and a worker that executes them.
 
 ```
-cd server
-copy .env.example .env
+docker run -d --name shotiq-redis -p 6379:6379 redis:alpine
+cd worker
+npm install && npm run build
+
+npm start           # job API on 3001
+npm run start:worker    # the consumer, in a second terminal
 ```
 
-Put a free [Google AI Studio](https://aistudio.google.com/apikey) key in `GEMINI_API_KEY`, then set `SHOTIQ_SUMMARY_LIVE=true` in the same file.
+Interactive docs at http://localhost:3001/docs. Submit a job there, then poll `GET /api/jobs/{id}` and watch it move from `queued` to `completed` with a result attached.
 
-That flag defaults to **false**, and only the exact word `true` enables it. A deployment setting nothing at all therefore serves only cached summaries and cannot spend quota. The key is read by the Python service alone — it never reaches the browser, and must never be named with a `VITE_` prefix, because Vite inlines those into the client bundle at build time.
+**Generating new AI notes** is optional — the five seasons above are committed and work with no setup. For a different player, put a free [Google AI Studio](https://aistudio.google.com/apikey) key in `server/.env` as `GEMINI_API_KEY` and set `SHOTIQ_SUMMARY_LIVE=true`. That flag defaults to false and only the exact word `true` enables it, so a deployment that sets nothing cannot spend quota.
 
-## How it's built
+---
+
+## Layout
 
 ```
 src/
   components/   presentational React components
-  hooks/        reusable stateful logic (useFetchData)
+  hooks/        reusable stateful logic
   services/     the only place that calls fetch
   utils/        pure data logic — sorting, chart aggregation
 server/         FastAPI service + cached NBA data
 worker/         TypeScript job service that pre-warms the cache
 ```
 
-Components never call `fetch` directly; they call a service function, or a hook wrapping one, so request handling stays in one place and components are testable without a network. The same split applies to data shaping: everything the charts need is computed by pure functions in `utils/`, so it can be unit-tested without a DOM and the chart components only ever draw.
+`web` (nginx, port 8080) is the only published service. `api` is reachable solely over the compose network, so the browser calls `/api/...` with no host in the path and nothing in the bundle knows where the API lives.
 
-**One aggregation is worth calling out, because getting it wrong is silent.** League FG% per band is re-derived as `sum(made) / sum(attempts)`, never as the mean of the per-row percentages the API returns. Those rows are split by court area, so a band pairs a 9-attempt backcourt row with a 26,514-attempt one; weighting them equally moves *Above the Break 3* from a true .350 to a reported .429. A test pins the correct figure.
+### The warm worker
 
-### The AI summary
+A standalone TypeScript service that queues the slow parts of a lookup — the fetch from `stats.nba.com`, which can take 90 seconds, and the metered LLM call — so the dashboard does not wait on them. It calls the existing API rather than reimplementing any analytics.
 
-That aggregation exists twice — `src/utils/aggregate.js` for the charts, `server/analytics.py` for the prompt — and the duplication is deliberate. The client already has the numbers, but the summary endpoint must not accept them: anything a client posts is attacker-controlled, and accepting aggregates would let anyone put arbitrary text into an LLM prompt paid for by this project's key. The request body is two optional identifiers with `extra="forbid"`, so a smuggled field is rejected rather than ignored, and every number the model sees is re-derived server-side.
+`POST /api/jobs` returns **202** for new work and **200 with `deduplicated: true`** for a repeat, because the job id is derived from the player and season (`warm:201939:2016-17`), so duplicates collide by construction. Jobs live in Redis, so they outlive the process that created them.
 
-The price is two implementations that could drift apart silently, so both suites pin the same three figures off the same committed cache file — `.573 / .446 / +12.7` for the 8-16 ft band. A change to either that moves those numbers turns one suite red and names the side that moved.
+## API
 
-The model is given the digest and told to use nothing else: no outside knowledge, no web search, and no bucket flagged as a thin sample. That last rule matters more than it sounds — the raw data contains a shot-type bucket with a single made attempt, which a model left to itself will happily report as 100% shooting.
+| Endpoint | Contents |
+| --- | --- |
+| `GET /api/shots?playerId=&season=` | One record per attempt — distance, angle, coordinates, period, clock, zone, make/miss. Plus league-average FG% by zone. |
+| `GET /api/splits?playerId=&season=` | Defender distance, shot clock, dribbles, touch time. Empty before 2013-14. |
+| `GET /api/players?q=` | Name search, offline. |
+| `GET /api/seasons` | Selectable seasons, flagged for tracking availability. |
+| `POST /api/summary` | The AI scouting note. |
+| `GET /api/health` | Liveness. |
 
-`POST /api/summary` is a POST rather than a GET because on a cache miss it spends money and writes a file, and because a GET invites browsers to prefetch it on hover. Cached notes carry a fingerprint of the numbers they describe; if the underlying data changes, the note is flagged stale rather than silently regenerated.
-
-## The warm worker
-
-`worker/` is a standalone TypeScript service that pre-computes and caches player-season data so the dashboard is not the thing waiting on it. It runs beside the existing services and neither the Python nor the React code changes to accommodate it.
-
-**What it queues is the I/O, not the arithmetic**, and that choice is the whole design. The aggregation is microseconds; the expensive parts are the fetch from stats.nba.com, which the API allows itself 90 seconds to complete, and the LLM call, which costs money and returns 503 often enough to need a retry policy. Those are worth doing out of band. The maths is not — and re-implementing it here would add a third copy alongside `aggregate.js` and `analytics.py`, one not pinned to the `.573 / .446 / +12.7` twins and therefore free to drift unnoticed. The worker calls the existing API and caches what comes back.
-
-`POST /api/jobs` answers **202 Accepted**, never 200: the work has been queued and has not been done, and saying otherwise would claim a warm cache that does not exist yet. Asking twice for the same player-season returns **200 with `deduplicated: true`** and the same job id — not a 409, because the caller wanted that subject warm and it is, and a client retrying after a dropped connection should not be punished for it. That works because the job id is derived from the subject itself (`warm:201939:2016-17`, mirroring the `shots-201939-2016-17.json` cache naming), so duplicates collide by construction rather than through a check that can be raced.
-
-Jobs live in **Redis, via BullMQ**, which is what makes that last claim survive contact with reality. An in-memory queue would have been simpler and would have lost every job on restart — and losing jobs is precisely the failure this service exists to handle. The state being outside the process is also what lets several API replicas share one view of it, and what will let a separate worker process consume the queue. Both are verified against a real Redis rather than a mock: one test reads a job back through a second connection built as a restarted container would build it, and another fires ten identical submissions at once and asserts that exactly one job exists and exactly one caller is told it created it.
-
-That second test earned its place by failing. The first implementation checked for an existing job and then added one — check-then-act, which is a race — and told all ten callers they had created the job. One job existed, so the important guarantee held, but nine callers got a 202 for work they had not caused. The fix is Redis `SET NX`, which performs the test and the write as a single operation so exactly one caller can ever win.
-
-```
-docker run -d --name shotiq-redis -p 6379:6379 redis:alpine
-cd worker
-npm install
-npm run build
-node dist/index.js
-```
-
-Interactive docs are served at **`http://localhost:3001/docs`**, generated from the same JSON Schemas the validator uses — the same arrangement as the Python service's `/docs`, so both halves of the stack are explored the same way. The raw OpenAPI document at `/docs/json` imports directly into Postman or Insomnia. Nothing is hand-maintained, so the page can only be wrong if the server is wrong.
-
-The service is TypeScript in `strict` mode, and every payload type was written against a real response rather than inferred from the Python that produces it. That was not ceremony: `angleDeg` is null on 317 of Curry's 1,443 attempts in 2016-17, and a pre-tracking season returns `overall: null` with empty split arrays. Both would have compiled perfectly as non-nullable and then produced `NaN` through a fifth of the data, or thrown on the first old season anyone selected.
-
-**Types are erased before the process starts, so they defend nothing at the edge.** A request posting `{"playerId": "banana"}` satisfies every type in this repository. The JSON Schema on each route is what actually runs, rejecting a bad body before the handler is entered — so by the time typed code executes, the type is true. Fastify's validator defaults had to be tightened for that to hold: `coerceTypes` silently converts the string `"201939"` into a number, and `removeAdditional` turns `additionalProperties: false` into *strip the unknown key and return 200*, which would have let a typo like `includeSumary` through as a success with the summary quietly never running. Both are off explicitly, and a test pins the behaviour rather than the setting.
+Responses are cached to `server/cache/` by player and season; add `?refresh=true` to force a refetch.
 
 ## Tests
 
 ```
-npm test
-```
+npm test                      # frontend — 112 tests
 
-```
 cd worker
-npm test
-npm run test:integration
-```
+npm test                      # unit — 36 tests, no Redis needed
+npm run test:integration      # 6 tests against a real Redis
 
-The worker's two suites are split rather than merged, and the split is the same principle as the offline enforcement above. `npm test` never touches Redis and never claims to have tested it; `npm run test:integration` needs a real Redis and **fails** if one is absent, rather than skipping. A suite that goes green on a machine where nothing was verified is worse than one that will not run.
-
-```
 cd server
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .venv\Scripts\python.exe -m pytest
 ```
 
-| Suite | Covers |
-| --- | --- |
-| `src/utils/sorting.test.js` | The comparator — missing values last in *both* directions, input never mutated, `Q2` before `Q10`. |
-| `src/utils/aggregate.test.js` | Chart aggregation — league rates weighted not averaged, `null` at zero attempts, thin samples flagged, unlabelled buckets dropped. |
-| `src/services/nbaApi.test.js` | Query-string construction and the `response.ok` check, since `fetch` resolves rather than rejects on 4xx and 5xx. |
-| `src/components/DistanceChart.test.jsx` | League-tick arithmetic either side of the colour boundary. |
-| `src/components/charts.render.test.jsx` | Both charts mounted in a DOM — values printed, ticks drawn, empty seasons rendering nothing. |
-| `src/components/AiSummary.test.jsx` | That the panel requests nothing until asked, posts identifiers only, and tells a disabled deployment apart from a real failure. |
-| `server/tests/test_nba_source.py` | Season parsing, shot-angle derivation, team-abbreviation lookup, player-search ranking. |
-| `server/tests/test_analytics.py` | The server-side digest, including the figures pinned against the JS twin. |
-| `server/tests/test_summary.py` | Prompt construction, response parsing, the cache gate, vendor failures becoming our own error type. |
-| `server/tests/test_api.py` | Real HTTP requests through FastAPI's `TestClient`. |
-| `worker/src/queue/jobId.test.ts` | That the job id is deterministic and distinguishes both player and season — the property idempotency rests on. |
-| `worker/src/types/models.test.ts` | That the models accept the real payloads, nulls included, and that a `WarmResult` narrows on `status` so no branch can read another's fields. |
-| `worker/src/config.test.ts` | That a bad environment variable kills the process at boot rather than surfacing later — including `"3001abc"`, which `parseInt` would accept as 3001. |
-| `worker/src/api/server.test.ts` | Real requests through Fastify's `inject` — the 202/200 split, deduplication measured by store size, and 400s for a string id, a float id, a malformed season and an unknown property. |
-| `worker/src/queue/bullJobStore.integration.test.ts` | Real Redis — that a job is readable through a second connection, survives the process that created it, and that ten concurrent submissions produce one job and exactly one `accepted`. |
+**Everything runs offline, and that is enforced rather than trusted.** The NBA fetchers raise under a fixture, constructing a real LLM client raises, and the live-generation flag is pinned off regardless of what sits in a developer's `.env`. The worker's integration tests are the one exception and are kept separate: they need a real Redis and **fail** if one is absent, rather than skipping — a suite that goes green where nothing was verified is worse than one that will not run.
 
-**The suite runs entirely offline, and that is enforced rather than trusted.** Cached responses are committed, so data endpoints resolve from disk; one test asserts `meta.source == "cache"` so the suite fails if it starts reaching the network. Because that guard only covers the paths it exercises — and one test slipped past it — the fetchers themselves now raise under a fixture.
+## Decisions worth asking about
 
-Nothing calls the LLM either. Every test injects a stub client, a fixture makes *constructing* a real one raise, and another pins the live-generation flag off regardless of what sits in the developer's `.env`.
+Short version; the commit messages carry the full reasoning.
 
-## Data
-
-Shot data comes from `stats.nba.com` via [`nba_api`](https://github.com/swar/nba_api).
-
-| Endpoint | Contents |
-| --- | --- |
-| `GET /api/shots?playerId=&season=` | One record per attempt — distance, angle, coordinates, period and clock, zone, make/miss. Plus league-average FG% by zone as a baseline. |
-| `GET /api/splits?playerId=&season=` | Tracking splits — defender distance, shot clock, dribbles, touch time, shot category, each with FG% and eFG%. Empty before 2013-14. |
-| `GET /api/players?q=` | Name search, backed by the offline list bundled with `nba_api`, so it never touches the network. |
-| `GET /api/seasons` | Selectable seasons, newest first, each flagged for whether tracking data exists. |
-| `POST /api/summary` | The AI scouting note for a player and season. |
-| `GET /api/health` | Liveness check. Does not call the NBA API. |
-
-Both data endpoints fall back to the configured default when `playerId` or `season` is omitted, so the client never hard-codes who the featured player is.
-
-Queries use `team_id=0` — "this player on whichever team" — because pinning a team id silently drops half the shots of anyone traded mid-season.
-
-Responses are cached to `server/cache/`, keyed by player and season. A completed season is immutable, so the cache is served indefinitely; add `?refresh=true` to force a refetch. The five featured seasons are committed: `stats.nba.com` is undocumented, rate-limits aggressively, and blocks many datacenter IP ranges, so those files double as a fallback keeping the dashboard working when the upstream is not. Other players are fetched live and cached locally.
-
-To change which player and season the app opens on, set `SHOTIQ_PLAYER_ID` and `SHOTIQ_SEASON` — see `server/config.py`.
+- **League rates are weighted, never averaged.** `sum(made)/sum(attempts)`, because averaging per-row percentages moves *Above the Break 3* from a true .350 to a reported .429.
+- **A rate with zero attempts is `null`, never `0`.** Zero claims he tried and missed.
+- **The aggregation exists twice on purpose** — once for the charts, once for the LLM prompt — because the summary endpoint must not accept client-computed numbers. Both suites pin the same three figures so drift reddens one side and names it.
+- **Charts use green/grey, not red/green**, which are ~7 delta-E apart under common colour blindness versus 26 for blue/orange. Bars always start at zero.
+- **Bar length encodes attempts, not percentage**, so shot selection and accuracy are readable at once.
+- **`team_id=0`** on every query — pinning a real team id silently drops half the shots of anyone traded mid-season.
+- **The AI note is generated headline-last**, because a model filling a schema in order otherwise commits to a thesis before examining the evidence.
+- **The API image is Debian, not Alpine** — pandas and numpy cannot use manylinux wheels against musl.
+- **Job identity is derived from the subject, never a UUID**, which is what makes a retried request harmless instead of duplicated work.
 
 ## Acknowledgements
+
+Shot data from `stats.nba.com` via [`nba_api`](https://github.com/swar/nba_api).
 
 Built as a pair-programming exercise with Claude (Anthropic). The reasoning behind each architectural decision is recorded in the commit history.
