@@ -34,10 +34,32 @@ export type SubmitOutcome =
   | { readonly kind: "accepted"; readonly job: JobRecord }
   | { readonly kind: "duplicate"; readonly job: JobRecord };
 
+/**
+ * Every method returns a Promise, including the in-memory implementation's,
+ * where nothing is actually asynchronous.
+ *
+ * That is the point. The interface has to describe the SLOWEST plausible
+ * implementation, not the one that happens to exist first. Redis is a
+ * network hop, so the real store cannot answer synchronously -- and if this
+ * interface were synchronous, swapping it in would break every call site at
+ * once, late, in code that had been written assuming an immediate answer.
+ *
+ * Async is contagious in exactly this way: a function that awaits something
+ * must itself be async, and so must its caller, all the way up. Deciding
+ * that boundary early costs nothing; discovering it late is a refactor.
+ *
+ * `Promise<T>` is a generic type -- the T is what the promise eventually
+ * produces. `Promise<JobRecord | undefined>` says "later, either a record or
+ * nothing", which is a different claim from `Promise<JobRecord> | undefined`
+ * ("either a promise, or nothing at all, right now"). Reading that
+ * distinction correctly is most of learning to type async code.
+ */
 export interface JobStore {
-  submit(data: WarmJobData): SubmitOutcome;
-  get(jobId: string): JobRecord | undefined;
-  size(): number;
+  submit(data: WarmJobData): Promise<SubmitOutcome>;
+  get(jobId: string): Promise<JobRecord | undefined>;
+  size(): Promise<number>;
+  /** Releases whatever the implementation holds. A no-op for the Map. */
+  close(): Promise<void>;
 }
 
 /**
@@ -52,7 +74,11 @@ export function createInMemoryJobStore(): JobStore {
   const jobs = new Map<string, JobRecord>();
 
   return {
-    submit(data: WarmJobData): SubmitOutcome {
+    // `async` on a method that awaits nothing is not waste: it makes the
+    // return type Promise<SubmitOutcome> automatically, so this satisfies
+    // the interface without every return statement being wrapped in
+    // Promise.resolve by hand.
+    async submit(data: WarmJobData): Promise<SubmitOutcome> {
       const jobId = warmJobId(data.playerId, data.season);
 
       const existing = jobs.get(jobId);
@@ -71,12 +97,16 @@ export function createInMemoryJobStore(): JobStore {
       return { kind: "accepted", job };
     },
 
-    get(jobId: string): JobRecord | undefined {
+    async get(jobId: string): Promise<JobRecord | undefined> {
       return jobs.get(jobId);
     },
 
-    size(): number {
+    async size(): Promise<number> {
       return jobs.size;
+    },
+
+    async close(): Promise<void> {
+      jobs.clear();
     },
   };
 }

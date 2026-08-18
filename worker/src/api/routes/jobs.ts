@@ -70,7 +70,14 @@ export async function jobRoutes(
       },
     },
     async (request, reply) => {
-      const outcome = store.submit(request.body);
+      // The `await` is not optional decoration. Without it `outcome` would be
+      // a Promise, `outcome.kind` would be undefined, and the function would
+      // fall through to the duplicate branch for every request -- a bug that
+      // TypeScript does catch here, because Promise<SubmitOutcome> has no
+      // `kind` property. Forgetting an await is the single commonest async
+      // mistake, and it is only sometimes this visible: on a value you merely
+      // pass along, the promise flows onward and surfaces far from its cause.
+      const outcome = await store.submit(request.body);
 
       // 202 Accepted, not 200 OK, and the distinction is the entire point of
       // an async service: the work has been accepted for later processing
@@ -103,7 +110,7 @@ export async function jobRoutes(
       },
     },
     async (request, reply) => {
-      const job = store.get(request.params.id);
+      const job = await store.get(request.params.id);
 
       // `undefined` has to be handled because Map.get returns `T | undefined`
       // and strictNullChecks will not let it past. Without that flag this

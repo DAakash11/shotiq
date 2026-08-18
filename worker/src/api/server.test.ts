@@ -80,7 +80,7 @@ describe("POST /api/jobs", () => {
     // Same id, and only one job exists. This is idempotency measured rather
     // than asserted: the second call did not create work.
     expect(second.json().jobId).toBe(first.json().jobId);
-    expect(store.size()).toBe(1);
+    expect(await store.size()).toBe(1);
   });
 
   it("treats a different season as a different job", async () => {
@@ -95,7 +95,7 @@ describe("POST /api/jobs", () => {
       payload: { playerId: 201939, season: "2015-16" },
     });
 
-    expect(store.size()).toBe(2);
+    expect(await store.size()).toBe(2);
   });
 });
 
@@ -115,7 +115,7 @@ describe("POST /api/jobs rejects what the type system cannot", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(store.size()).toBe(0);
+    expect(await store.size()).toBe(0);
   });
 
   it("rejects a non-integer player id", async () => {
@@ -166,7 +166,7 @@ describe("POST /api/jobs rejects what the type system cannot", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(store.size()).toBe(0);
+    expect(await store.size()).toBe(0);
   });
 
   it("accepts the correctly spelled optional field", async () => {

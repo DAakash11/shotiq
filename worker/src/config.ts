@@ -19,6 +19,8 @@ export interface Config {
   readonly host: string;
   /** Base URL of the existing ShotIQ FastAPI. */
   readonly shotiqApiUrl: string;
+  /** Redis connection string, e.g. redis://127.0.0.1:6379. */
+  readonly redisUrl: string;
   /** How long to wait on the upstream before giving up, in ms. */
   readonly upstreamTimeoutMs: number;
   readonly logLevel: string;
@@ -70,6 +72,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // a server that is plainly running. Compose overrides this with
     // http://api:8000, where the service name resolves correctly either way.
     shotiqApiUrl: env["SHOTIQ_API_URL"] ?? "http://127.0.0.1:8000",
+
+    // 127.0.0.1 for the same IPv6 reason as above. Compose overrides it with
+    // redis://redis:6379.
+    redisUrl: env["REDIS_URL"] ?? "redis://127.0.0.1:6379",
 
     // 90 seconds, matching what the Python API allows itself to reach
     // stats.nba.com. A shorter timeout here would abandon requests the

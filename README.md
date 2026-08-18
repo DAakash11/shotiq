@@ -114,6 +114,18 @@ The model is given the digest and told to use nothing else: no outside knowledge
 
 `POST /api/jobs` answers **202 Accepted**, never 200: the work has been queued and has not been done, and saying otherwise would claim a warm cache that does not exist yet. Asking twice for the same player-season returns **200 with `deduplicated: true`** and the same job id — not a 409, because the caller wanted that subject warm and it is, and a client retrying after a dropped connection should not be punished for it. That works because the job id is derived from the subject itself (`warm:201939:2016-17`, mirroring the `shots-201939-2016-17.json` cache naming), so duplicates collide by construction rather than through a check that can be raced.
 
+Jobs live in **Redis, via BullMQ**, which is what makes that last claim survive contact with reality. An in-memory queue would have been simpler and would have lost every job on restart — and losing jobs is precisely the failure this service exists to handle. The state being outside the process is also what lets several API replicas share one view of it, and what will let a separate worker process consume the queue. Both are verified against a real Redis rather than a mock: one test reads a job back through a second connection built as a restarted container would build it, and another fires ten identical submissions at once and asserts that exactly one job exists and exactly one caller is told it created it.
+
+That second test earned its place by failing. The first implementation checked for an existing job and then added one — check-then-act, which is a race — and told all ten callers they had created the job. One job existed, so the important guarantee held, but nine callers got a 202 for work they had not caused. The fix is Redis `SET NX`, which performs the test and the write as a single operation so exactly one caller can ever win.
+
+```
+docker run -d --name shotiq-redis -p 6379:6379 redis:alpine
+cd worker
+npm install
+npm run build
+node dist/index.js
+```
+
 Interactive docs are served at **`http://localhost:3001/docs`**, generated from the same JSON Schemas the validator uses — the same arrangement as the Python service's `/docs`, so both halves of the stack are explored the same way. The raw OpenAPI document at `/docs/json` imports directly into Postman or Insomnia. Nothing is hand-maintained, so the page can only be wrong if the server is wrong.
 
 The service is TypeScript in `strict` mode, and every payload type was written against a real response rather than inferred from the Python that produces it. That was not ceremony: `angleDeg` is null on 317 of Curry's 1,443 attempts in 2016-17, and a pre-tracking season returns `overall: null` with empty split arrays. Both would have compiled perfectly as non-nullable and then produced `NaN` through a fifth of the data, or thrown on the first old season anyone selected.
@@ -129,7 +141,10 @@ npm test
 ```
 cd worker
 npm test
+npm run test:integration
 ```
+
+The worker's two suites are split rather than merged, and the split is the same principle as the offline enforcement above. `npm test` never touches Redis and never claims to have tested it; `npm run test:integration` needs a real Redis and **fails** if one is absent, rather than skipping. A suite that goes green on a machine where nothing was verified is worse than one that will not run.
 
 ```
 cd server
@@ -153,6 +168,7 @@ cd server
 | `worker/src/types/models.test.ts` | That the models accept the real payloads, nulls included, and that a `WarmResult` narrows on `status` so no branch can read another's fields. |
 | `worker/src/config.test.ts` | That a bad environment variable kills the process at boot rather than surfacing later — including `"3001abc"`, which `parseInt` would accept as 3001. |
 | `worker/src/api/server.test.ts` | Real requests through Fastify's `inject` — the 202/200 split, deduplication measured by store size, and 400s for a string id, a float id, a malformed season and an unknown property. |
+| `worker/src/queue/bullJobStore.integration.test.ts` | Real Redis — that a job is readable through a second connection, survives the process that created it, and that ten concurrent submissions produce one job and exactly one `accepted`. |
 
 **The suite runs entirely offline, and that is enforced rather than trusted.** Cached responses are committed, so data endpoints resolve from disk; one test asserts `meta.source == "cache"` so the suite fails if it starts reaching the network. Because that guard only covers the paths it exercises — and one test slipped past it — the fetchers themselves now raise under a fixture.
 
