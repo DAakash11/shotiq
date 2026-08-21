@@ -11,9 +11,25 @@
 
 set -euo pipefail
 
-PROJECT="${PROJECT:-shotiq-506111}"
-REGION="${REGION:-us-central1}"
 TF_DIR="$(dirname "$0")/../terraform"
+
+# Read these from Terraform rather than hardcoding them. An early version of
+# this script pinned REGION=us-central1 and was silently wrong within hours,
+# when two GCE_STOCKOUT failures moved the whole deployment to us-east1.
+#
+# A teardown script that names the wrong region checks the wrong project for
+# leftovers and reports all-clear over resources that are still billing --
+# which is the exact failure the script exists to prevent. Anything already
+# published as an output is a fact to be read, never a constant to repeat.
+PROJECT="${PROJECT:-$(terraform -chdir="$TF_DIR" output -raw project_id 2>/dev/null)}"
+REGION="${REGION:-$(terraform -chdir="$TF_DIR" output -raw region 2>/dev/null)}"
+
+if [ -z "$PROJECT" ] || [ -z "$REGION" ]; then
+  echo "Could not read project_id/region from terraform outputs." >&2
+  echo "Either run from a directory with initialised state, or set them:" >&2
+  echo "  PROJECT=my-project REGION=us-east1 bash scripts/teardown.sh" >&2
+  exit 1
+fi
 
 echo "==> Teardown for project: $PROJECT"
 echo
