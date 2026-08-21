@@ -19,3 +19,18 @@ output "region" {
   description = "Region regional resources are created in."
   value       = var.region
 }
+
+output "network_name" {
+  description = "VPC the cluster attaches to."
+  value       = google_compute_network.vpc.name
+}
+
+output "subnet_name" {
+  description = "Subnet the nodes take their addresses from."
+  value       = google_compute_subnetwork.gke.name
+}
+
+output "registry_url" {
+  description = "Docker registry host and path to tag images against. Feeds the CI workflow, so the value GCP chose is never retyped into a YAML file where it can drift."
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.shotiq.repository_id}"
+}

@@ -168,23 +168,20 @@ gcloud services enable \
   storage.googleapis.com monitoring.googleapis.com logging.googleapis.com
 ```
 
-A new GCP project has almost every API disabled. That is a deliberate default
-rather than an obstacle: an API that is off cannot be billed and cannot be
-attacked, so a project only carries the surface it actually uses.
+(A new GCP project ships with almost every API disabled.)
 
 ### Authentication
 
-Two logins, and they are not the same one twice:
+Two logins, and both are needed:
 
 ```
 gcloud auth login                      # credential for the gcloud tool itself
 gcloud auth application-default login  # Application Default Credentials, read by Terraform
 ```
 
-The second writes the credential that *client libraries* look for, and the
-Terraform Google provider is one. Without it `gcloud` works while
-`terraform plan` fails claiming it cannot find default credentials — which
-looks like a Terraform problem and is not.
+The second writes the credential *client libraries* look for, and the Terraform
+Google provider is one. Without it `gcloud` works while `terraform plan` fails
+claiming it cannot find default credentials.
 
 ### Infrastructure
 
@@ -207,17 +204,24 @@ terraform apply                                # make it so
 | `variables.tf` | input declarations, with validation |
 | `main.tf` | provider config and resources |
 | `outputs.tf` | values published for scripts and CI to consume |
+| `network.tf` | VPC and the subnet the cluster runs in |
+| `registry.tf` | Artifact Registry repo, with cleanup policies |
 | `terraform.tfvars` | this environment's values — **gitignored** |
 
-`plan` is not a formality. It is a dry run against the real API that prints
-every create, change and destroy before one of them happens, and reading it is
-the habit that catches a one-character edit which would have replaced a cluster
-rather than updated it.
+The subnet is **VPC-native**: a primary range for nodes plus secondary ranges
+for pods and services, so every pod holds a real routable VPC address rather
+than a port mapped onto its host. GKE allocates a whole `/24` of pod space per
+node, so the pod range is sized in nodes — the `/20` here allows sixteen,
+against a cluster capped at three.
 
-Credentials appear nowhere in the config. The provider block sets no
-`credentials` argument, so it falls back to Application Default Credentials —
-a developer's own login locally, and a federated identity in CI. The same files
-authenticate in both places precisely because neither is named in them.
+No `credentials` argument appears on the provider, so it uses Application
+Default Credentials: a developer's own login locally, a federated identity in
+CI. The same files authenticate in both places because neither is named in them.
+
+The registry carries cleanup policies — untagged versions deleted after seven
+days, five most recent kept regardless. Registry storage is billed per GB-month
+and survives a cluster teardown, so an unbounded registry is the line item that
+outlives everything else.
 
 ## Acknowledgements
 
