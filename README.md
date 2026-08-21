@@ -141,7 +141,7 @@ cd server
 ## Deployment
 
 ShotIQ runs on Google Kubernetes Engine, on infrastructure defined entirely in
-Terraform and deployed by GitHub Actions.
+Terraform.
 
 The cluster is created and destroyed on demand rather than left running — it is
 a portfolio demo on trial credit, not a service with users, so the interesting
@@ -154,8 +154,8 @@ empty project in one command.
 | --- | --- | --- |
 | [gcloud CLI](https://cloud.google.com/sdk/docs/install) | 581.0.0 | authenticating to GCP, inspecting the project |
 | [Terraform](https://developer.hashicorp.com/terraform/install) | 1.11.4 | provisioning the cluster, network and registry |
-| [kubectl](https://kubernetes.io/docs/tasks/tools/) | 1.30.2 | applying manifests, inspecting the running cluster |
-| Docker | 27.2.0 | building the images the cluster runs |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/) | 1.36.1 | applying manifests, inspecting the running cluster |
+| Docker | 29.7.2 | building the images the cluster runs |
 
 Plus a GCP project with billing enabled, and these APIs turned on:
 
@@ -206,22 +206,42 @@ terraform apply                                # make it so
 | `outputs.tf` | values published for scripts and CI to consume |
 | `network.tf` | VPC and the subnet the cluster runs in |
 | `registry.tf` | Artifact Registry repo, with cleanup policies |
+| `iam.tf` | least-privilege service account for the nodes |
+| `cluster.tf` | the GKE cluster and its node pool |
 | `terraform.tfvars` | this environment's values — **gitignored** |
 
-The subnet is **VPC-native**: a primary range for nodes plus secondary ranges
-for pods and services, so every pod holds a real routable VPC address rather
-than a port mapped onto its host. GKE allocates a whole `/24` of pod space per
-node, so the pod range is sized in nodes — the `/20` here allows sixteen,
-against a cluster capped at three.
+The subnet is VPC-native — a primary range for nodes plus secondary ranges for
+pods and services. The cluster is zonal and runs two `e2-medium` Spot nodes,
+sized for cost; the node pool's `max_node_count` is the cost ceiling.
 
-No `credentials` argument appears on the provider, so it uses Application
-Default Credentials: a developer's own login locally, a federated identity in
-CI. The same files authenticate in both places because neither is named in them.
+### Connecting to the cluster
 
-The registry carries cleanup policies — untagged versions deleted after seven
-days, five most recent kept regardless. Registry storage is billed per GB-month
-and survives a cluster teardown, so an unbounded registry is the line item that
-outlives everything else.
+```
+gcloud components install gke-gcloud-auth-plugin
+terraform -chdir=terraform output -raw kubectl_config_command   # prints the get-credentials line
+kubectl get nodes
+```
+
+The plugin is required: since Kubernetes 1.26 `kubectl` does not authenticate
+to GKE itself, and without it every command fails with
+`executable gke-gcloud-auth-plugin not found`.
+
+### Teardown
+
+The cluster bills while it exists — roughly **$0.026/hr** as configured.
+
+```
+bash scripts/teardown.sh
+```
+
+Deletes LoadBalancer Services, runs `terraform destroy`, then queries the API
+for anything still billing. The order matters: a `type: LoadBalancer` Service is
+created by Kubernetes rather than Terraform, so `destroy` alone can orphan a
+forwarding rule at ~$0.025/hr.
+
+Artifact Registry storage is **not** removed by teardown. That is deliberate —
+re-pushing images every session is slower than the cents it saves — and the
+repo's cleanup policies cap how far it can grow.
 
 ## Acknowledgements
 

@@ -46,3 +46,71 @@ variable "zone" {
   # three times the cost of a demo that has no users to keep online.
   default = "us-central1-a"
 }
+
+# --- node pool sizing ---------------------------------------------------
+#
+# Every variable below exists because its default is expensive. Grouping
+# them here means the cost of the cluster can be read off one screen
+# rather than reconstructed from arguments scattered through cluster.tf.
+
+variable "node_machine_type" {
+  description = "Machine type for cluster nodes."
+  type        = string
+
+  # e2-medium is 2 shared vCPU and 4 GB. The obvious cheaper choice,
+  # e2-small, has 2 GB -- of which only ~1.3 GB is ALLOCATABLE once GKE's
+  # own system pods (kube-proxy, kube-dns, metrics-server, the logging
+  # agent) have taken their reservation. The FastAPI container wants
+  # 300-400 MB with pandas imported, so a 2 GB node spends its life
+  # OOMKilled or leaving pods Pending.
+  #
+  # "Allocatable is not capacity" is the wall everyone hits once. It costs
+  # about a cent an hour to stay off it.
+  default = "e2-medium"
+}
+
+variable "node_disk_size_gb" {
+  description = "Boot disk per node, in GB."
+  type        = number
+
+  # GKE's default is 100 GB. At roughly $0.10/GB/month that is $10 per
+  # node per month of disk for an image set totalling about 1.5 GB -- and
+  # it is billed whether or not the node is busy. 20 GB leaves ample room
+  # for the OS, the kubelet and every ShotIQ image at once.
+  #
+  # This single line is the largest saving in the file.
+  default = 20
+}
+
+variable "node_min_count" {
+  description = "Floor for the autoscaler."
+  type        = number
+
+  # Two, not one. A single-node cluster cannot tolerate the node being
+  # replaced -- and on Spot, being replaced is routine rather than
+  # exceptional.
+  default = 2
+}
+
+variable "node_max_count" {
+  description = "Ceiling for the autoscaler. This is the cost cap."
+  type        = number
+
+  # The autoscaler will never exceed this, so this number multiplied by
+  # the node hourly rate is the worst case the cluster can bill. Three.
+  default = 3
+}
+
+variable "use_spot_nodes" {
+  description = "Run nodes as Spot VMs (60-80% cheaper, reclaimable at 30 seconds' notice)."
+  type        = bool
+
+  # Spot instances are surplus capacity that Google can take back at any
+  # time with a 30-second warning. For stateless replicas behind a
+  # Deployment that is a rescheduling event, not an outage.
+  #
+  # Defaulting this to true is a deliberate exception to "a flag that
+  # costs money should fail closed" -- here the SAFE default and the CHEAP
+  # default are the same one, so the flag fails closed by being on.
+  default = true
+}
