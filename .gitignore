@@ -42,6 +42,34 @@ server/cache/*
 .env.*
 !.env.example
 
+# Terraform
+#
+# Added before terraform/ exists, deliberately. State is written on the very
+# first `terraform apply`, and a state file committed once stays in the
+# history whether or not it is deleted later.
+#
+# State is not a build artefact -- it is the record mapping each resource in
+# the config to the real object in GCP, and it holds every attribute those
+# objects returned, in cleartext, including ones marked sensitive. It is also
+# the thing that makes `destroy` possible: lose it and Terraform no longer
+# knows what it created, so the resources keep billing with nothing tracking
+# them.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl.bak
+crash.log
+
+# Values, not declarations. variables.tf declares what the config takes and is
+# committed; .tfvars carries this environment's actual project id and is not.
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Kubernetes -- kubeconfig embeds a cluster access token.
+kubeconfig
+*.kubeconfig
+
 # Personal
 handoff-shotiq.md
 

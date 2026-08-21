@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and fill in your own project.
+#
+#     cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars is gitignored; this template is not. Anyone cloning the
+# repo can therefore see exactly which values the config needs without
+# learning which project mine ran in.
+
+# Your GCP project ID -- the globally unique one, NOT the display name.
+# Find it with: gcloud projects list
+project_id = "your-project-id-here"
+
+# Both optional; the defaults in variables.tf are us-central1/us-central1-a,
+# chosen for cost. Uncomment to move closer to your users.
+# region = "us-central1"
+# zone   = "us-central1-a"

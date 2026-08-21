@@ -138,6 +138,87 @@ cd server
 
 **Everything runs offline, and that is enforced rather than trusted.** The NBA fetchers raise under a fixture, constructing a real LLM client raises, and the live-generation flag is pinned off regardless of what sits in a developer's `.env`. The TypeScript service replaces `fetch` with a guard that both rejects and *records* the attempt — recording matters, because its HTTP client catches every network failure and wraps it, so a throw alone would be swallowed and a test could pass having gone out to the internet. The worker's integration tests are the one exception and are kept separate: they need a real Redis and **fail** if one is absent, rather than skipping — a suite that goes green where nothing was verified is worse than one that will not run.
 
+## Deployment
+
+ShotIQ runs on Google Kubernetes Engine, on infrastructure defined entirely in
+Terraform and deployed by GitHub Actions.
+
+The cluster is created and destroyed on demand rather than left running — it is
+a portfolio demo on trial credit, not a service with users, so the interesting
+property is that `terraform apply` reproduces the whole environment from an
+empty project in one command.
+
+### Prerequisites
+
+| Tool | Version used | Purpose |
+| --- | --- | --- |
+| [gcloud CLI](https://cloud.google.com/sdk/docs/install) | 581.0.0 | authenticating to GCP, inspecting the project |
+| [Terraform](https://developer.hashicorp.com/terraform/install) | 1.11.4 | provisioning the cluster, network and registry |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/) | 1.30.2 | applying manifests, inspecting the running cluster |
+| Docker | 27.2.0 | building the images the cluster runs |
+
+Plus a GCP project with billing enabled, and these APIs turned on:
+
+```
+gcloud services enable \
+  cloudresourcemanager.googleapis.com serviceusage.googleapis.com \
+  compute.googleapis.com container.googleapis.com \
+  artifactregistry.googleapis.com iam.googleapis.com \
+  iamcredentials.googleapis.com sts.googleapis.com \
+  storage.googleapis.com monitoring.googleapis.com logging.googleapis.com
+```
+
+A new GCP project has almost every API disabled. That is a deliberate default
+rather than an obstacle: an API that is off cannot be billed and cannot be
+attacked, so a project only carries the surface it actually uses.
+
+### Authentication
+
+Two logins, and they are not the same one twice:
+
+```
+gcloud auth login                      # credential for the gcloud tool itself
+gcloud auth application-default login  # Application Default Credentials, read by Terraform
+```
+
+The second writes the credential that *client libraries* look for, and the
+Terraform Google provider is one. Without it `gcloud` works while
+`terraform plan` fails claiming it cannot find default credentials — which
+looks like a Terraform problem and is not.
+
+### Infrastructure
+
+Everything GCP-side is declared in [`terraform/`](terraform/) and nothing is
+clicked in the console. The console is fine for looking; a resource created
+there exists only in that project and in whoever's memory, and it will still
+be billing next month.
+
+```
+cd terraform
+cp terraform.tfvars.example terraform.tfvars   # then set project_id
+terraform init                                 # download providers, write the lock file
+terraform plan                                 # show what would change; changes nothing
+terraform apply                                # make it so
+```
+
+| File | Holds |
+| --- | --- |
+| `versions.tf` | Terraform and provider version constraints |
+| `variables.tf` | input declarations, with validation |
+| `main.tf` | provider config and resources |
+| `outputs.tf` | values published for scripts and CI to consume |
+| `terraform.tfvars` | this environment's values — **gitignored** |
+
+`plan` is not a formality. It is a dry run against the real API that prints
+every create, change and destroy before one of them happens, and reading it is
+the habit that catches a one-character edit which would have replaced a cluster
+rather than updated it.
+
+Credentials appear nowhere in the config. The provider block sets no
+`credentials` argument, so it falls back to Application Default Credentials —
+a developer's own login locally, and a federated identity in CI. The same files
+authenticate in both places precisely because neither is named in them.
+
 ## Acknowledgements
 
 Shot data from `stats.nba.com` via [`nba_api`](https://github.com/swar/nba_api).
