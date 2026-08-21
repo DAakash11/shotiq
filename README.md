@@ -214,6 +214,31 @@ The subnet is VPC-native — a primary range for nodes plus secondary ranges for
 pods and services. The cluster is zonal and runs two `e2-medium` Spot nodes,
 sized for cost; the node pool's `max_node_count` is the cost ceiling.
 
+### Images
+
+Three images cover the five containers — `redis` uses the public image, and
+`worker` / `worker-api` are the same image run with different commands.
+
+```
+gcloud auth configure-docker us-east1-docker.pkg.dev
+SHA=$(git rev-parse --short HEAD)
+REG=$(terraform -chdir=terraform output -raw registry_url)
+
+docker build -t $REG/api:$SHA    -f server/Dockerfile .
+docker build -t $REG/web:$SHA    -f Dockerfile .
+docker build -t $REG/worker:$SHA -f worker/Dockerfile .
+
+docker push $REG/api:$SHA && docker push $REG/web:$SHA && docker push $REG/worker:$SHA
+```
+
+Tagged with the git SHA rather than `latest`. A mutable tag means a running
+Deployment cannot tell you which commit it is, rollback has no name to roll
+back to, and re-applying an unchanged manifest produces no rollout at all.
+
+`configure-docker` installs a credential *helper* rather than performing a
+login, so `~/.docker/config.json` holds no password — Docker asks gcloud for a
+short-lived token on each push.
+
 ### Connecting to the cluster
 
 ```
