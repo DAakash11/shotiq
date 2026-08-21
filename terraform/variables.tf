@@ -86,19 +86,38 @@ variable "node_min_count" {
   description = "Floor for the autoscaler."
   type        = number
 
-  # Two, not one. A single-node cluster cannot tolerate the node being
-  # replaced -- and on Spot, being replaced is routine rather than
-  # exceptional.
-  default = 2
+  # Three, and the number came from measuring rather than guessing.
+  #
+  # Started at two. On the running cluster each e2-medium reported 940m CPU
+  # allocatable, of which kube-system had ALREADY requested 750m on one node
+  # and 664m on the other -- around 466m left across the whole cluster for
+  # five application containers, and at most 276m on any single node.
+  #
+  # GKE's per-node overhead is close to a fixed cost (DNS, kube-proxy, the
+  # logging agent, the metadata server), so small nodes pay it
+  # disproportionately: two e2-mediums lose roughly 88% of raw CPU before
+  # the application sees any. gke-metadata-server alone accounts for 200m
+  # of that, purely because Workload Identity is enabled -- a feature
+  # choice in cluster.tf costing CPU in a way nothing surfaces until you
+  # run `kubectl describe node`.
+  #
+  # A third node roughly doubles schedulable CPU for ~$0.013/hr, and leaves
+  # room for a rolling update to run old and new pods side by side.
+  #
+  # Never one: a single-node cluster cannot tolerate its node being
+  # replaced, and on Spot that is routine rather than exceptional.
+  default = 3
 }
 
 variable "node_max_count" {
   description = "Ceiling for the autoscaler. This is the cost cap."
   type        = number
 
-  # The autoscaler will never exceed this, so this number multiplied by
-  # the node hourly rate is the worst case the cluster can bill. Three.
-  default = 3
+  # The autoscaler will never exceed this, so this number times the node
+  # hourly rate is the worst case the pool can bill: ~$0.052/hr.
+  #
+  # It must stay above node_min_count or the autoscaler has nowhere to go.
+  default = 4
 }
 
 variable "use_spot_nodes" {

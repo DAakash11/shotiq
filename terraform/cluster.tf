@@ -136,10 +136,27 @@ resource "google_container_node_pool" "primary" {
     max_node_count = var.node_max_count
   }
 
-  # Starting size. The autoscaler owns the count afterwards, which is why
-  # this is `initial_` -- Terraform must not fight the autoscaler by
-  # resetting the size on every apply.
+  # Starting size, and ONLY the starting size. The autoscaler owns the count
+  # from the moment the pool exists, which is why this is `initial_`.
   initial_node_count = var.node_min_count
+
+  lifecycle {
+    # initial_node_count FORCES REPLACEMENT of the node pool when it
+    # changes, which is a genuinely bad trade: raising the autoscaler's
+    # floor from 2 to 3 would otherwise destroy both working nodes and
+    # rebuild them -- another roll of the GCE_STOCKOUT dice for a change
+    # that needs no disruption at all.
+    #
+    # Ignoring it is correct rather than a workaround. The value is a seed
+    # consumed once at creation; afterwards the real count belongs to the
+    # autoscaler, and min_node_count = 3 is enough to make it add a third
+    # node in place. Terraform diffing a field it does not own is the bug.
+    #
+    # Caught by reading the plan for "forces replacement" instead of
+    # skimming the summary line. `Plan: 1 to add, 1 to destroy` and
+    # `Plan: 0 to add, 1 to change` look similar and are not.
+    ignore_changes = [initial_node_count]
+  }
 
   management {
     auto_repair  = true
